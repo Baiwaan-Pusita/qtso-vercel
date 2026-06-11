@@ -496,12 +496,25 @@ def _build_parent_fields(payload: dict, scope: str = "all") -> tuple[dict, list]
 
 
 def _write_parent_with_retry(parent_fields: dict, record_id: str | None = None,
-                              method: str = "POST", token: str | None = None) -> tuple[dict, dict]:
-    """POST (create) or PUT (update) parent fields with progressive drop-retry."""
+                              method: str = "POST", token: str | None = None,
+                              fallback_to_tenant: bool = True) -> tuple[dict, dict]:
+    """POST (create) or PUT (update) parent fields with progressive drop-retry.
+
+    Token strategy: callers normally pass the user's OAuth user_access_token so
+    Lark's system "Created by" field gets stamped with the human's identity
+    (avatar + Thai name visible in Lark UI, not "bot"). If the user_token POST
+    fails with 99991679 (missing scope), automatically fall back to tenant_token
+    so the record still gets created — just attributed to the app instead.
+    Set fallback_to_tenant=False to disable the fallback (e.g. for endpoints
+    where authorship matters more than success)."""
     tok = token or get_token()
     base = f"/open-apis/bitable/v1/apps/{BASE_APP_TOKEN}/tables/{TABLES['qt_mgmt']}/records"
     url = f"{base}/{record_id}" if record_id else base
     res = lark_request(method, url, {"fields": parent_fields}, token=tok)
+    # Fallback: user_token lacks bitable scope → retry as tenant
+    if (res.get("code") == 99991679 or "99991679" in (res.get("body") or "")) \
+            and fallback_to_tenant and token and token != get_token():
+        res = lark_request(method, url, {"fields": parent_fields}, token=get_token())
     for drop in ("Credit term", "Brand's Confirm", "QT Confirm Create by", "Approver"):
         if res.get("code") == 0: break
         if drop in parent_fields:
@@ -732,11 +745,15 @@ def _get_qt_full(record_id: str) -> dict:
 def api_qt_phase2():
     payload = request.get_json(silent=True) or {}
     sess = get_session()
+    user_token = sess.get("user_access_token") if sess else None
     if sess:
         payload["created_by_open_id"] = payload.get("created_by_open_id") or sess.get("open_id")
         payload["created_by_name"] = payload.get("created_by_name") or sess.get("en_name") or sess.get("name")
     fields, skipped = _build_parent_fields(payload, scope="phase2")
-    res, _ = _write_parent_with_retry(fields)
+    # Pass user_token → Lark stamps the system "Created by" field with the
+    # human's avatar + name instead of the bot's. Falls back to tenant_token
+    # automatically if the user lacks bitable scope.
+    res, _ = _write_parent_with_retry(fields, token=user_token)
     if res.get("code") != 0:
         return jsonify({"ok": False, "step": "phase2_create", "error": res,
                         "skipped_invalid_options": skipped,
@@ -766,6 +783,7 @@ def api_qt_phase2():
 def api_qt_phase2_update():
     payload = request.get_json(silent=True) or {}
     sess = get_session()
+    user_token = sess.get("user_access_token") if sess else None
     if sess:
         payload["created_by_open_id"] = payload.get("created_by_open_id") or sess.get("open_id")
     rid = payload.get("record_id")
@@ -773,7 +791,7 @@ def api_qt_phase2_update():
         return jsonify({"ok": False, "error": "record_id required"}), 400
     fields, skipped = _build_parent_fields(payload, scope="phase2")
     fields.pop("Status", None)  # preserve existing Lark status on re-edit
-    res, _ = _write_parent_with_retry(fields, record_id=rid, method="PUT")
+    res, _ = _write_parent_with_retry(fields, record_id=rid, method="PUT", token=user_token)
     return jsonify({
         "ok": res.get("code") == 0, "record_id": rid,
         "error": res if res.get("code") != 0 else None,
@@ -808,7 +826,8 @@ def api_qt_phase3():
         })
 
     all_fields, skipped = _build_parent_fields(payload, scope="all")
-    upd_res, _ = _write_parent_with_retry(all_fields, record_id=record_id, method="PUT")
+    upd_res, _ = _write_parent_with_retry(all_fields, record_id=record_id, method="PUT",
+                                           token=user_token)
     if upd_res.get("code") != 0:
         return jsonify({"ok": False, "step": "phase3_patch_parent",
                         "error": upd_res, "skipped_invalid_options": skipped})
