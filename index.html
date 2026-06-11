@@ -643,17 +643,25 @@ body.preview-open header {
     </div>
 
     <div style="margin-top: 14px;">
-      <label class="req">Created by (ล็อกจาก Lark login)</label>
-      <div id="created_by_display" style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--primary-gradient-soft); border:1px solid #dee3f5; border-radius:var(--radius-sm);">
+      <label class="req">Created by (ผู้กรอกฟอร์ม)</label>
+      <!-- Searchable user picker — replaces Lark OAuth login. Pulls the full
+           Lark Employee directory via /api/all-employees, lets the user pick
+           themselves (or whoever's filling the form on their behalf), and
+           sticks the choice in localStorage so they don't have to re-pick
+           on every visit. -->
+      <div style="position:relative;">
+        <input id="created_by_picker" autocomplete="off"
+               placeholder="พิมพ์ชื่อผู้กรอกฟอร์ม… (เลือกจากรายชื่อพนักงาน)"
+               style="width:100%;" />
+        <div id="created_by_picker_dropdown" class="custom-dropdown"></div>
+      </div>
+      <div id="created_by_display" style="display:none; margin-top:10px; align-items:center; gap:10px; padding:10px 12px; background:var(--primary-gradient-soft); border:1px solid #dee3f5; border-radius:var(--radius-sm);">
         <span id="cb_avatar"></span>
         <div style="flex:1;">
           <div id="cb_name" style="font-weight:600; color:var(--text);">—</div>
           <div id="cb_meta" style="font-size:11px; color:var(--muted);"></div>
         </div>
-        <!-- Login state badge — toggled by setLoggedInUser / setLoggedOut -->
-        <span id="cb_logged_in" style="display:none; background:var(--success-soft); color:var(--success); padding:3px 10px; border-radius:999px; font-size:11px; font-weight:600;">🔒 Lark Login</span>
-        <a id="cb_login_btn" href="/api/auth/login" style="display:inline-block; background:linear-gradient(135deg,#2b5cf2,#6c4cf3); color:white; padding:6px 14px; border-radius:var(--radius-sm); font-size:12px; font-weight:700; text-decoration:none; box-shadow:0 2px 8px rgba(43,92,242,0.25);">🔓 Login with Lark</a>
-        <button type="button" id="btn_logout" style="background:white; color:var(--danger); border:1px solid #fca5a5; padding:5px 12px; border-radius:var(--radius-sm); font-size:11px; cursor:pointer; font-weight:600; display:none;">Logout</button>
+        <button type="button" id="btn_logout" style="background:white; color:var(--danger); border:1px solid #fca5a5; padding:5px 12px; border-radius:var(--radius-sm); font-size:11px; cursor:pointer; font-weight:600;">เปลี่ยน</button>
       </div>
       <input type="hidden" id="created_by_open_id">
       <input type="hidden" id="created_by">
@@ -977,21 +985,15 @@ function setLoggedInUser(u) {
   document.getElementById('created_by').value = u.en_name || u.name || '';
   document.getElementById('created_by_open_id').value = u.open_id || '';
   document.getElementById('cb_name').textContent = u.en_name || u.name || '—';
-  // Show whether the session has a real Lark OAuth token (required to bypass
-  // field-level protection on the prod base) or is just a dev-mode session.
-  const hasToken = !!u.has_user_token;
-  document.getElementById('cb_meta').textContent = hasToken
-    ? 'มี Lark token — เขียนได้ทุก field'
-    : 'Dev mode — บาง field จะ skip (Item / BU / desc_mode)';
-  document.getElementById('cb_meta').style.color = hasToken ? 'var(--success)' : '#b45309';
-  // Toggle badge + login button + logout
-  const badge = document.getElementById('cb_logged_in');
-  const loginBtn = document.getElementById('cb_login_btn');
-  const logoutBtn = document.getElementById('btn_logout');
-  if (badge) badge.style.display = hasToken ? 'inline-block' : 'none';
-  if (loginBtn) loginBtn.style.display = hasToken ? 'none' : 'inline-block';
-  if (loginBtn && !hasToken) loginBtn.textContent = '🔓 Upgrade to Lark Login';
-  if (logoutBtn) logoutBtn.style.display = 'inline-block';
+  document.getElementById('cb_meta').textContent = u.open_id
+    ? `open_id: ${String(u.open_id).slice(0, 20)}…`
+    : '';
+  document.getElementById('cb_meta').style.color = 'var(--muted)';
+  // Hide the picker input, show the selected-user card
+  const pickerInp = document.getElementById('created_by_picker');
+  const card = document.getElementById('created_by_display');
+  if (pickerInp) pickerInp.parentElement.style.display = 'none';
+  if (card) card.style.display = 'flex';
   const av = document.getElementById('cb_avatar');
   if (u.avatar_url) {
     av.innerHTML = `<img src="${escapeAttr(u.avatar_url)}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;" alt="">`;
@@ -999,6 +1001,21 @@ function setLoggedInUser(u) {
     const initial = (u.en_name || u.name || '?')[0].toUpperCase();
     av.innerHTML = `<span style="display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#2b5cf2,#6c4cf3);color:white;font-weight:700;">${escapeHtml(initial)}</span>`;
   }
+}
+
+function clearCreatedBy() {
+  state.currentUser = null;
+  document.getElementById('created_by').value = '';
+  document.getElementById('created_by_open_id').value = '';
+  const pickerInp = document.getElementById('created_by_picker');
+  const card = document.getElementById('created_by_display');
+  if (pickerInp) {
+    pickerInp.parentElement.style.display = '';
+    pickerInp.value = '';
+    pickerInp.focus();
+  }
+  if (card) card.style.display = 'none';
+  try { localStorage.removeItem('qtso_picked_user'); } catch (_) {}
 }
 
 // Try to grab user identity from the Lark JS SDK (only works when this page
@@ -1031,40 +1048,17 @@ async function tryLarkSdkLogin() {
 }
 
 async function bootstrap() {
-  // Login priority (most-to-least seamless):
-  //   1) Lark JS SDK (when embedded in Lark Suite) — silent, no UI
-  //   2) Existing cookie session — silent
-  //   3) For returning users, silent OAuth redirect (consented before)
-  //   4) First-time users see form + manual Login with Lark button
+  // No Lark OAuth — Created by is set by an in-form user picker
+  // (populated from /api/all-employees, persisted in localStorage).
+  // We still GET /api/me in case a session exists from earlier; if it does,
+  // we use it as a hint. But the picker is the primary path.
   setStatus('Loading…');
-  // Give the Lark SDK script ~1.5s to load + initialize, then try SDK login
-  if (!window.tt && !window.h5sdk) await new Promise(r => setTimeout(r, 1500));
-  await tryLarkSdkLogin();  // best-effort, no error if SDK unavailable
+  // No-op login check kept for compatibility — if there happens to be a
+  // pre-existing session cookie from earlier Lark OAuth flows, surface it
+  // as the picked user. Otherwise the in-form picker takes over.
   try {
     const me = await fetchJSON('/api/me');
-    if (me.logged_in) {
-      setLoggedInUser(me);
-      // Remember that this user has consented — so on next visit we can
-      // auto-redirect silently if the cookie expires.
-      localStorage.setItem('qtso_lark_consented', '1');
-    } else {
-      const params = new URLSearchParams(location.search);
-      const cooldownAt = parseInt(localStorage.getItem('qtso_auth_cooldown') || '0', 10);
-      const consentedBefore = localStorage.getItem('qtso_lark_consented') === '1';
-      const now = Date.now();
-      if (params.has('auth_error')) {
-        localStorage.setItem('qtso_auth_cooldown', String(now + 10 * 60 * 1000));
-        history.replaceState({}, '', location.pathname);
-      } else if (consentedBefore && now > cooldownAt && !params.has('no_auto_auth')) {
-        // Returning user — already authorized this app once. Silent redirect
-        // back to Lark; if their browser still has a Lark session, we're
-        // straight back with no UI shown.
-        location.href = '/api/auth/login';
-        return;
-      }
-      // First-time visitor — DON'T auto-redirect. Let them see the form and
-      // click "Login with Lark" themselves. Avoids trapping them on consent.
-    }
+    if (me.logged_in) setLoggedInUser(me);
   } catch (e) {
     // ignore — keep UI usable
   }
@@ -1597,7 +1591,73 @@ function renderCreatedByCard(e) {
 }
 
 function populateCreatedBy() {
-  // Created by is now locked to Lark login (set by setLoggedInUser)
+  // Searchable picker. No Lark OAuth — just pick yourself from the directory.
+  // Choice persists in localStorage so you don't re-pick on every visit.
+  const inp = document.getElementById('created_by_picker');
+  const dd  = document.getElementById('created_by_picker_dropdown');
+  const card = document.getElementById('created_by_display');
+  if (!inp || !dd) return;
+
+  function render(filter) {
+    const list = state.allEmployees || [];
+    const q = (filter || '').trim().toLowerCase();
+    const filtered = q
+      ? list.filter(e => {
+          const hay = `${e.en_name || ''} ${e.name || ''} ${e.lark_name || ''} ${e.email || ''}`.toLowerCase();
+          return hay.includes(q);
+        })
+      : list;
+    if (!filtered.length) {
+      dd.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:12px;">— ไม่พบ —</div>';
+      return;
+    }
+    dd.innerHTML = filtered.slice(0, 30).map(e => {
+      const display = e.en_name || e.name || e.lark_name || '?';
+      const sub = e.title || e.dept || e.email || '';
+      const avi = e.avatar_url
+        ? `<img src="${escapeAttr(e.avatar_url)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;" alt="">`
+        : `<span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#2b5cf2,#6c4cf3);color:white;font-weight:700;font-size:11px;flex-shrink:0;">${escapeHtml(display[0].toUpperCase())}</span>`;
+      return `<div class="custom-dropdown-item" data-open-id="${escapeAttr(e.open_id || '')}" data-name="${escapeAttr(display)}" data-avatar="${escapeAttr(e.avatar_url || '')}" style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-bottom:1px solid #f0f1f5;">
+        ${avi}
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;font-size:13px;">${escapeHtml(display)}</div>
+          <div style="font-size:11px;color:var(--muted);">${escapeHtml(sub)}</div>
+        </div>
+      </div>`;
+    }).join('');
+    dd.querySelectorAll('.custom-dropdown-item').forEach(el => {
+      el.addEventListener('mousedown', (ev) => {
+        ev.preventDefault();
+        const u = {
+          open_id: el.dataset.openId,
+          name: el.dataset.name,
+          en_name: el.dataset.name,
+          avatar_url: el.dataset.avatar,
+        };
+        setLoggedInUser(u);
+        try { localStorage.setItem('qtso_picked_user', JSON.stringify(u)); } catch (_) {}
+        dd.classList.remove('open');
+        inp.value = '';
+      });
+    });
+  }
+
+  inp.addEventListener('focus', () => { render(inp.value); dd.classList.add('open'); });
+  inp.addEventListener('input', (ev) => {
+    if (!ev.isTrusted) return;
+    render(inp.value);
+    dd.classList.add('open');
+  });
+  inp.addEventListener('blur', () => setTimeout(() => dd.classList.remove('open'), 150));
+
+  // Restore saved choice from localStorage on bootstrap
+  try {
+    const saved = localStorage.getItem('qtso_picked_user');
+    if (saved) {
+      const u = JSON.parse(saved);
+      if (u && u.open_id) setLoggedInUser(u);
+    }
+  } catch (_) {}
 }
 
 function _OLD_populateCreatedBy_unused() {
@@ -3314,16 +3374,9 @@ async function submitPhase3() {
   document.addEventListener('change', scheduleAuto);
 })();
 
-// Logout button
-document.getElementById('btn_logout')?.addEventListener('click', async () => {
-  const ok = await showConfirm({
-    title: 'Logout',
-    message: 'ออกจากระบบ Lark?',
-    okText: 'Logout',
-    cancelText: 'ยกเลิก',
-    icon: '🚪',
-  });
-  if (ok) window.location = '/api/auth/logout';
+// "เปลี่ยน" button — clear the currently picked user, re-show the search picker
+document.getElementById('btn_logout')?.addEventListener('click', () => {
+  if (typeof clearCreatedBy === 'function') clearCreatedBy();
 });
 
 // Back button: Phase 2 → Phase 1 (only when QT not yet created)
