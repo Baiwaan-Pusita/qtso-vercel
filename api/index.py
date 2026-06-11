@@ -47,13 +47,23 @@ TABLES = {
 }
 
 def _redirect_url() -> str:
-    # Vercel sets VERCEL_URL = e.g. "qtso-app.vercel.app" on every deploy.
-    # Use it so OAuth redirect matches the live hostname automatically.
-    explicit = os.environ.get("LARK_OAUTH_REDIRECT")
+    """Lark redirect URI — MUST exactly match what's registered in the Lark
+    Developer Console (Security Settings → Redirect URLs). Misconfiguration
+    yields Lark error 20029 "Invalid redirect URL".
+
+    Resolution order:
+      1) LARK_OAUTH_REDIRECT env var (explicit override — for any custom domain).
+      2) Hardcoded production URL — stable across Vercel preview hashes.
+      3) Localhost fallback for `python3 api/index.py` dev runs.
+
+    DO NOT use VERCEL_URL — Vercel mints a fresh preview-hash hostname per
+    deploy (e.g. qtso-vercel-hgbo3ayhu-…), so Lark can never have that exact
+    URL pre-registered and OAuth fails on every preview."""
+    explicit = os.environ.get("LARK_OAUTH_REDIRECT", "").strip()
     if explicit:
         return explicit
-    if os.environ.get("VERCEL_URL"):
-        return f"https://{os.environ['VERCEL_URL']}/api/auth/lark/callback"
+    if os.environ.get("VERCEL"):
+        return "https://qtso-vercel.vercel.app/api/auth/lark/callback"
     return "http://localhost:3000/api/auth/lark/callback"
 
 # ─── Lark API helpers (ported from server.py) ────────────────────────────────
