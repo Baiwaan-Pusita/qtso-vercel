@@ -420,6 +420,47 @@ def api_auth_logout():
     resp.set_cookie("sid", "", max_age=0, httponly=True, samesite="Lax")
     return resp
 
+# ─── Write endpoints (stubs — TODO port from server.py) ──────────────────────
+# These all return a clear "not yet implemented" error so the frontend shows
+# a friendly message instead of crashing on a 404. Port from server.py:
+#   _qt_phase2 / _qt_phase2_update / _qt_phase3 / _create_lines_only / _qt_lookup
+# Write endpoints REQUIRE a user_access_token in the session (from OAuth) to
+# bypass field-level protection on the 4 SingleSelect fields in prod base.
+
+def _write_stub():
+    return jsonify({
+        "ok": False,
+        "error": "write_not_implemented",
+        "message": "Write endpoints are not yet ported to the Vercel build. "
+                   "Use the local Python server (port 3000) for submits until "
+                   "qt-phase2/qt-phase3 are added in the next deploy.",
+    }), 501
+
+@app.route("/api/qt-phase2", methods=["POST"])
+def api_qt_phase2(): return _write_stub()
+
+@app.route("/api/qt-phase2-update", methods=["POST"])
+def api_qt_phase2_update(): return _write_stub()
+
+@app.route("/api/qt-phase3", methods=["POST"])
+def api_qt_phase3(): return _write_stub()
+
+@app.route("/api/qt-lookup", methods=["POST"])
+def api_qt_lookup(): return _write_stub()
+
+@app.route("/api/draft-render", methods=["POST"])
+def api_draft_render():
+    # Frontend's preview pane polls this constantly — return an empty HTML
+    # placeholder so it doesn't display a noisy error in the side-panel.
+    return ('<html><body style="font-family:Sarabun,sans-serif;padding:40px;'
+            'text-align:center;color:#666;">Preview not yet available in '
+            'Vercel build — coming soon.</body></html>',
+            200, {"Content-Type": "text/html; charset=utf-8"})
+
+@app.route("/api/qt/<record_id>", methods=["GET"])
+def api_qt_record(record_id):
+    return jsonify({"error": "not_implemented", "record_id": record_id}), 501
+
 # ─── Static fallback (Vercel routes / → public/index.html directly) ──────────
 
 @app.route("/", methods=["GET"])
