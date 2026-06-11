@@ -850,6 +850,23 @@ def api_qt_phase3():
     all_fields, skipped = _build_parent_fields(payload, scope="all")
     upd_res, _ = _write_parent_with_retry(all_fields, record_id=record_id, method="PUT")
     if upd_res.get("code") != 0:
+        # 1254043 = RecordIdNotFound — usually a stale localStorage draft
+        # pointing at a parent record that no longer exists in Lark (deleted,
+        # base swapped, or Phase 2 never actually persisted). Surface a clear
+        # actionable message so the user can recover without confusion.
+        if upd_res.get("code") == 1254043:
+            return jsonify({
+                "ok": False,
+                "step": "phase3_patch_parent",
+                "error": "stale_parent_record",
+                "message": ("QT parent record ไม่พบใน Lark Base (อาจถูกลบ "
+                            "หรือ draft เก่าใน localStorage ค้างอยู่). "
+                            "กรุณาเคลียร์ draft แล้วเริ่มสร้าง QT ใหม่: "
+                            "ใน Console (F12) พิมพ์ "
+                            "`localStorage.clear(); location.reload()`."),
+                "stale_record_id": record_id,
+                "lark_response": upd_res,
+            })
         return jsonify({"ok": False, "step": "phase3_patch_parent",
                         "error": upd_res, "skipped_invalid_options": skipped})
 
