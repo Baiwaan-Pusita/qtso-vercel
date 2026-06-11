@@ -996,19 +996,31 @@ function setLoggedInUser(u) {
 }
 
 async function bootstrap() {
-  // Login is OPTIONAL — never redirect automatically. The Lark "Login" button
-  // in the header lets the user opt in. We don't auto-redirect because
-  // a misconfigured Lark redirect URL (error 20029) would trap the user on
-  // Lark's error page with no way back to our form. Always show form first.
+  // Silent Lark login: if user has an active Lark session in this browser
+  // (or in the Lark desktop app), Lark's OAuth returns instantly with no UI.
+  // Cookie session is set, user shows up as "Created by" in records.
+  // If anything fails (Lark error 20029 / network), we set a 10-min cooldown
+  // so the user isn't trapped in a redirect loop — form stays usable as
+  // anonymous in the meantime.
   setStatus('Loading…');
   try {
     const me = await fetchJSON('/api/me');
     if (me.logged_in) {
       setLoggedInUser(me);
-    }
-    // Clean any leftover ?auth_error=... param from a previous failed callback
-    if (new URLSearchParams(location.search).has('auth_error')) {
-      history.replaceState({}, '', location.pathname);
+    } else {
+      const params = new URLSearchParams(location.search);
+      const cooldownAt = parseInt(localStorage.getItem('qtso_auth_cooldown') || '0', 10);
+      const now = Date.now();
+      if (params.has('auth_error')) {
+        // Just bounced back from Lark error — back off for 10 minutes
+        localStorage.setItem('qtso_auth_cooldown', String(now + 10 * 60 * 1000));
+        history.replaceState({}, '', location.pathname);
+      } else if (now > cooldownAt && !params.has('no_auto_auth')) {
+        // Silent OAuth attempt — Lark redirects us straight back if a
+        // session already exists for this user in the browser/desktop app
+        location.href = '/api/auth/login';
+        return;
+      }
     }
   } catch (e) {
     // ignore — keep UI usable
