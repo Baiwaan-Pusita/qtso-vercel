@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>QT/SO Generator — Ripples Commerce</title>
+<!-- Lark Web JS SDK — when this page is embedded inside Lark Suite as a
+     mini-app or iframe page, Lark injects `window.tt` (or `h5sdk`). We use
+     requestAuthCode() to grab an auth code with NO user-visible prompt —
+     the user is already authenticated in Lark Suite. Falls back to the
+     standard OAuth redirect button when accessed outside Lark Suite. -->
+<script src="https://lf3-static.bytednsdoc.com/obj/eden-cn/eh7nuhpEh7nupd/lark-js-sdk/h5-js-sdk-1.5.42/lark.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -995,14 +1001,45 @@ function setLoggedInUser(u) {
   }
 }
 
+// Try to grab user identity from the Lark JS SDK (only works when this page
+// is embedded inside Lark Suite as a Web App / mini-app iframe). Lark injects
+// window.tt or window.h5sdk; we call requestAuthCode() which returns an auth
+// code WITHOUT any UI prompt (user already authenticated in Lark Suite). Then
+// POST the code to /api/auth/lark/code-login → server exchanges it for a
+// user_access_token and sets the session cookie. Returns true on success.
+async function tryLarkSdkLogin() {
+  const tt = window.tt || window.h5sdk?.tt;
+  if (!tt || typeof tt.requestAuthCode !== 'function') return false;
+  try {
+    const code = await new Promise((resolve, reject) => {
+      tt.requestAuthCode({
+        appId: 'cli_aa9fd13c9b799eef',
+        success: (r) => resolve(r.code),
+        fail: reject,
+      });
+    });
+    if (!code) return false;
+    const r = await fetch('/api/auth/lark/code-login', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ code }),
+      credentials: 'include',
+    });
+    return r.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
 async function bootstrap() {
-  // Smart auto-login: redirect to Lark OAuth ONLY if the user has previously
-  // authorized this app (localStorage flag). First-time visitors see the form
-  // with a manual "Login with Lark" button — that way they're not trapped on
-  // Lark's consent screen on their first visit. After they authorize once,
-  // future visits silent-redirect automatically (cookie expired? Lark session
-  // active? → instant silent OAuth, no UI).
+  // Login priority (most-to-least seamless):
+  //   1) Lark JS SDK (when embedded in Lark Suite) — silent, no UI
+  //   2) Existing cookie session — silent
+  //   3) For returning users, silent OAuth redirect (consented before)
+  //   4) First-time users see form + manual Login with Lark button
   setStatus('Loading…');
+  // Give the Lark SDK script ~1.5s to load + initialize, then try SDK login
+  if (!window.tt && !window.h5sdk) await new Promise(r => setTimeout(r, 1500));
+  await tryLarkSdkLogin();  // best-effort, no error if SDK unavailable
   try {
     const me = await fetchJSON('/api/me');
     if (me.logged_in) {

@@ -430,6 +430,40 @@ def api_auth_logout():
     resp.set_cookie("sid", "", max_age=0, httponly=True, samesite="Lax")
     return resp
 
+
+@app.route("/api/auth/lark/code-login", methods=["POST"])
+def api_auth_lark_code_login():
+    """Exchange a Lark auth code (obtained client-side via tt.requestAuthCode
+    when embedded inside Lark Suite) for a user_access_token + session cookie.
+    No browser redirect involved — used by the JS SDK silent-login path."""
+    payload = request.get_json(silent=True) or {}
+    code = (payload.get("code") or "").strip()
+    if not code:
+        return jsonify({"ok": False, "error": "code required"}), 400
+    res = lark_request("POST", "/open-apis/authen/v1/access_token",
+                       {"grant_type": "authorization_code", "code": code},
+                       token=get_token())
+    if res.get("code") != 0:
+        return jsonify({"ok": False, "error": "exchange_failed", "detail": res}), 401
+    d = res.get("data", {})
+    if not d.get("open_id"):
+        return jsonify({"ok": False, "error": "no_open_id"}), 401
+    user = {
+        "open_id": d.get("open_id"),
+        "name": d.get("name"),
+        "en_name": d.get("en_name") or d.get("name"),
+        "avatar_url": d.get("avatar_url") or d.get("avatar_thumb") or "",
+        "user_id": d.get("user_id"),
+        "user_access_token": d.get("access_token"),
+        "refresh_token": d.get("refresh_token"),
+        "token_expires_at": int(time.time()) + int(d.get("expires_in") or 7200),
+    }
+    resp = make_response(jsonify({"ok": True, "user": {
+        "open_id": user["open_id"], "name": user["name"],
+        "en_name": user["en_name"], "avatar_url": user["avatar_url"],
+    }}))
+    return set_session_cookie(resp, user)
+
 # ─── Write helpers (ported from server.py) ───────────────────────────────────
 
 def _build_parent_fields(payload: dict, scope: str = "all") -> tuple[dict, list]:
