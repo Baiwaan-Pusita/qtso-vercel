@@ -1,0 +1,3385 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QT/SO Generator — Ripples Commerce</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f3f5fa;
+    --card: #ffffff;
+    --border: #e4e7ee;
+    --border-strong: #cdd2dc;
+    --text: #1c2434;
+    --muted: #6b7388;
+    --primary: #2b5cf2;
+    --primary-dark: #1f47c4;
+    --primary-soft: #eef2ff;
+    --primary-gradient: linear-gradient(135deg, #2b5cf2 0%, #6243ed 60%, #c43be0 100%);
+    --primary-gradient-soft: linear-gradient(135deg, #eef2ff 0%, #f3e8ff 100%);
+    --success: #0fa15a;
+    --success-soft: #dcfce7;
+    --danger: #dc2626;
+    --warning: #d97706;
+    --shadow-sm: 0 1px 3px rgba(20,30,60,0.05);
+    --shadow: 0 1px 3px rgba(20,30,60,0.06), 0 4px 14px rgba(20,30,60,0.04);
+    --shadow-lg: 0 4px 16px rgba(43,92,242,0.12), 0 12px 32px rgba(20,30,60,0.06);
+    --radius-sm: 8px;
+    --radius: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 22px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Sarabun', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5;
+  }
+  header {
+    background: linear-gradient(115deg, #2b5cf2 0%, #6243ed 60%, #c43be0 100%);
+    color: white; padding: 18px 32px; display: flex; align-items: center; justify-content: space-between;
+    box-shadow: 0 2px 12px rgba(43,92,242,0.18);
+  }
+  header .brand h1 { font-size: 18px; margin: 0; font-weight: 700; letter-spacing: 0.2px; }
+  header .brand .sub { opacity: 0.88; font-size: 12px; margin-top: 2px; }
+  header #status { font-size: 12.5px; opacity: 0.95; }
+  .container { max-width: 1180px; margin: 24px auto 60px; padding: 0 22px; display: grid; gap: 18px; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 20px 24px; box-shadow: var(--shadow);
+    transition: box-shadow 0.2s;
+  }
+  .card:hover { box-shadow: var(--shadow-lg); }
+  .card h2 {
+    font-size: 14px; margin: 0 0 16px; color: var(--muted); font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card h2::before {
+    content: ''; display: inline-block; width: 4px; height: 16px;
+    background: var(--primary); border-radius: 2px;
+  }
+  .grid { display: grid; gap: 14px; }
+  .grid-2 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .grid-3 { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+  .grid-4 { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+
+  label {
+    display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 5px;
+    font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase;
+  }
+  /* Red asterisk for required fields — pattern: text inside label ending with " *" */
+  .req::after { content: ' *'; color: var(--danger); font-weight: 700; }
+  input, select, textarea {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    font-size: 13.5px; background: white; color: var(--text); font-family: inherit;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(43,92,242,0.12);
+  }
+  input:disabled, select:disabled { background: #f4f5f8; color: #9ca3af; cursor: not-allowed; }
+  textarea { resize: vertical; min-height: 50px; }
+
+  .muted-line { font-size: 11.5px; color: var(--muted); margin-top: 4px; min-height: 14px; }
+
+  .info-card {
+    margin-top: 10px; padding: 12px 14px; background: var(--primary-gradient-soft);
+    border: 1px solid #dee3f5; border-radius: var(--radius); font-size: 12.5px;
+    display: none;
+  }
+  .info-card.show { display: block; }
+  .info-card .ic-name { font-weight: 700; color: var(--text); margin-bottom: 4px; font-size: 13.5px; }
+  .info-card .ic-row { display: flex; gap: 4px 14px; flex-wrap: wrap; color: var(--muted); margin: 2px 0; }
+  .info-card .ic-row b { color: var(--text); font-weight: 600; margin-right: 4px; }
+  .info-card .ic-badge {
+    display: inline-block; padding: 1px 8px; border-radius: 999px;
+    background: var(--primary-soft); color: var(--primary); font-size: 11px; font-weight: 600;
+  }
+
+  button {
+    cursor: pointer; border: none; padding: 10px 18px; border-radius: var(--radius-sm); font-size: 13px;
+    font-weight: 600; transition: all 0.15s; font-family: inherit;
+  }
+  .btn-primary { background: var(--primary-gradient); color: white; box-shadow: 0 2px 8px rgba(43,92,242,0.22); }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(43,92,242,0.32); }
+  .btn-primary:disabled { background: #9ca3af; cursor: not-allowed; transform: none; box-shadow: none; }
+  .btn-ghost { background: var(--primary-soft); color: var(--primary); }
+  .btn-ghost:hover { background: #dde5ff; transform: translateY(-1px); }
+  .btn-danger { background: transparent; color: var(--danger); padding: 4px 8px; font-size: 20px; line-height: 1; border-radius: var(--radius-sm); }
+  .btn-danger:hover { background: #fee2e2; }
+
+  table.items-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+  .items-table thead th {
+    text-align: left; font-weight: 700; font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.7px; padding: 8px 8px;
+    background: #f7f9fc; border-bottom: 1px solid var(--border);
+  }
+  .items-table thead th:first-child { border-top-left-radius: 8px; }
+  .items-table thead th:last-child { border-top-right-radius: 8px; }
+  .items-table tbody td { padding: 8px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .items-table tbody tr:last-child td { border-bottom: 1px solid var(--border); }
+  .items-table td input, .items-table td select { padding: 7px 10px; font-size: 13px; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+
+  .totals-card {
+    background: var(--primary-gradient-soft);
+    border: 1px solid #dee3f5; border-radius: var(--radius); padding: 16px 20px;
+    margin-top: 14px; margin-left: auto; max-width: 380px;
+  }
+  .totals-card .row {
+    display: grid; grid-template-columns: 1fr auto; gap: 18px;
+    padding: 5px 0; font-size: 13.5px;
+  }
+  .totals-card .label { color: var(--muted); }
+  .totals-card .row.grand {
+    border-top: 1.5px solid var(--text); margin-top: 6px; padding-top: 10px;
+    font-size: 15.5px; font-weight: 700; color: var(--text);
+  }
+
+  .actions { display: flex; gap: 12px; justify-content: flex-end; align-items: center; }
+  .actions #submit_status { font-size: 13.5px; }
+
+  .recent-table { font-size: 13px; }
+  .recent-table th, .recent-table td { padding: 9px 10px; }
+  .pill {
+    display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600;
+    background: var(--primary-soft); color: var(--primary);
+  }
+  .pill.ok { background: #dcfce7; color: var(--success); }
+  .pill.warn { background: #fef3c7; color: var(--warning); }
+  .empty { color: var(--muted); padding: 16px; text-align: center; font-style: italic; }
+
+  #status {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 50%;
+    background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.3);
+    font-size: 17px; line-height: 1;
+    transition: background 0.3s, transform 0.3s, border-color 0.3s;
+  }
+  #status.ok { background: rgba(220,252,231,0.22); border-color: rgba(187,247,208,0.55); }
+  #status.loading { background: rgba(255,255,255,0.18); }
+  #status.err { background: rgba(254,202,202,0.22); border-color: rgba(252,165,165,0.55); }
+  #status .status-icon { display: inline-block; transition: transform 0.3s; }
+  #status.loading .status-icon { animation: status-spin 1.6s linear infinite; }
+  @keyframes status-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  @media (max-width: 768px) {
+    .container { padding: 0 14px; }
+    header { padding: 14px 18px; }
+    .card { padding: 16px 18px; }
+  }
+/* === Custom Month/Year popup picker === */
+.myp-pop {
+  display: none; position: absolute; top: 100%; left: 0; margin-top: 6px;
+  background: white; border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-lg); padding: 14px; min-width: 260px; z-index: 9000;
+}
+.myp-pop.open { display: block; }
+.myp-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
+}
+.myp-yr {
+  font-size: 16px; font-weight: 700; color: var(--text);
+}
+.myp-arrow {
+  width: 30px; height: 30px; padding: 0; border: none;
+  background: var(--primary-soft); color: var(--primary); border-radius: 6px;
+  cursor: pointer; font-size: 16px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.myp-arrow:hover { background: var(--primary); color: white; }
+.myp-arrow:disabled { opacity: 0.4; cursor: not-allowed; background: var(--primary-soft); color: var(--primary); }
+.myp-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+}
+.myp-month {
+  background: white; color: var(--text); border: 1px solid var(--border);
+  padding: 10px 0; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.12s;
+}
+.myp-month:hover { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }
+.myp-month.sel { background: var(--primary-gradient); color: white; border-color: transparent; }
+.myp-month.today { border-color: var(--primary); color: var(--primary); }
+
+/* === Year-step buttons next to month input === */
+.year-nav-btn {
+  width: 32px; height: 38px; flex-shrink: 0;
+  background: var(--primary-soft); color: var(--primary);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 16px; font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; transition: all 0.12s;
+}
+.year-nav-btn:hover { background: var(--primary); color: white; transform: translateY(-1px); }
+.year-nav-btn:active { transform: translateY(0); }
+.year-nav-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+/* === Month/Year picker (calendar-style popup) === */
+.my-picker-btn {
+  width: 100%; padding: 9px 12px;
+  background: white; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 13.5px; font-family: inherit; color: var(--text);
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; text-align: left;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.my-picker-btn:hover { border-color: var(--border-strong); }
+.my-picker-btn:focus, .my-picker-btn.open {
+  outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(43,92,242,0.12);
+}
+.my-picker-btn .my-label { font-weight: 500; }
+.my-picker-btn .my-label.placeholder { color: var(--muted); font-weight: 400; }
+.my-picker-btn .my-chevron { color: var(--muted); font-size: 11px; margin-left: 8px; }
+
+.my-popup {
+  display: none;
+  position: absolute; top: 100%; left: 0; margin-top: 6px;
+  background: white; border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 12px; min-width: 260px; z-index: 200;
+}
+.my-popup.open { display: block; }
+.my-yearnav {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 8px 10px; border-bottom: 1px solid var(--border); margin-bottom: 10px;
+}
+.my-yearnav button {
+  background: var(--primary-soft); color: var(--primary);
+  width: 28px; height: 28px; border-radius: 6px; border: none;
+  font-size: 14px; font-weight: 700; cursor: pointer; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.my-yearnav button:hover { background: #dde5ff; }
+.my-yearnav button:disabled { opacity: 0.4; cursor: not-allowed; }
+.my-yearnav .my-year-label { font-size: 15px; font-weight: 700; color: var(--text); }
+.my-month-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+}
+.my-month-grid button {
+  background: white; color: var(--text); border: 1px solid var(--border);
+  padding: 9px 0; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.12s;
+}
+.my-month-grid button:hover { background: var(--primary-soft); border-color: var(--primary); }
+.my-month-grid button.selected {
+  background: var(--primary-gradient); color: white; border-color: transparent;
+  box-shadow: 0 2px 6px rgba(43,92,242,0.3);
+}
+.my-month-grid button.today { border-color: var(--primary); color: var(--primary); }
+
+/* === Custom searchable dropdown with avatars === */
+.custom-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0;
+  margin-top: 4px;
+  background: white; border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  max-height: 320px; overflow-y: auto;
+  z-index: 100;
+  display: none;
+}
+.custom-dropdown.open { display: block; }
+.cd-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; cursor: pointer; font-size: 13px;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background 0.12s;
+}
+.cd-item:last-child { border-bottom: none; }
+.cd-item:hover, .cd-item.active { background: var(--primary-soft); }
+.cd-item img.cd-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.cd-item .cd-avatar-placeholder {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--primary-gradient); color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 13px; flex-shrink: 0;
+}
+.cd-item .cd-name { font-weight: 600; color: var(--text); }
+.cd-item .cd-meta { font-size: 11px; color: var(--muted); }
+.cd-empty { padding: 14px; text-align: center; color: var(--muted); font-size: 12px; font-style: italic; }
+
+/* === 3-Phase stepper === */
+.stepper { display:flex; gap:8px; align-items:center; justify-content:center; margin: 18px 0 22px; flex-wrap:wrap; }
+.step { display:flex; align-items:center; gap:8px; padding:8px 14px; border-radius:24px; background:#e5e7eb; color:#6b7280; font-weight:600; font-size:13px; }
+.step.active { background:var(--primary-gradient); color:white; box-shadow:0 2px 8px rgba(43,92,242,0.3); }
+.step.done { background:var(--primary-soft); color:var(--primary); }
+.step .step-num { width:22px; height:22px; border-radius:50%; background:rgba(255,255,255,0.25); display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; }
+.step.done .step-num { background:var(--primary); color:white; }
+.step:not(.active):not(.done) .step-num { background:#cbd5e1; color:#475569; }
+.step-arrow { color:#cbd5e1; font-size:18px; }
+
+.type-picker { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin: 30px 0; }
+.type-card { padding:36px 28px; border-radius:var(--radius-lg); border:2px solid var(--border); background:white; cursor:pointer; transition:all 0.2s; text-align:center; }
+.type-card:hover { border-color:var(--primary); transform:translateY(-3px); box-shadow:var(--shadow-lg); }
+.type-card.disabled { opacity:0.5; cursor:not-allowed; }
+.type-card.disabled:hover { transform:none; border-color:var(--border); box-shadow:none; }
+.type-card .ico { font-size:42px; margin-bottom:10px; }
+.type-card .ttl { font-size:18px; font-weight:700; color:#1f2937; margin-bottom:6px; }
+.type-card .dsc { font-size:12px; color:#6b7280; }
+.type-card .badge-soon { display:inline-block; margin-top:8px; padding:3px 8px; background:#fef3c7; color:#92400e; border-radius:10px; font-size:11px; font-weight:600; }
+
+.qt-banner { background:var(--primary-gradient-soft); color:var(--primary-dark); padding:16px 22px; border-radius:var(--radius); margin:16px 0; display:flex; align-items:center; justify-content:space-between; gap:12px; font-weight:600; border:1px solid #dee3f5; }
+.qt-banner .qt-no { font-size:17px; font-family:'JetBrains Mono', monospace; background:white; padding:5px 14px; border-radius:var(--radius-sm); color:var(--primary); border:1px solid #dee3f5; }
+.qt-banner button { background:white; color:var(--primary-dark); border:1px solid #dee3f5; padding:7px 14px; border-radius:var(--radius-sm); cursor:pointer; font-size:12px; font-weight:600; margin-left:6px; transition:all 0.15s; }
+.qt-banner button:hover { background:var(--primary-soft); transform:translateY(-1px); }
+
+/* Locked Phase 2 (after Confirm) — blurred + disabled */
+.phase-locked {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.55;
+  filter: blur(0.4px) grayscale(20%);
+  user-select: none;
+  transition: opacity 0.25s, filter 0.25s;
+}
+.phase-locked::after {
+  content: "🔒 Booking confirmed — กด EDIT เพื่อแก้ไข";
+  position: absolute; top: 8px; right: 12px;
+  background: #0fa15a; color: white; padding: 4px 10px;
+  border-radius: 14px; font-size: 11px; font-weight: 600;
+  pointer-events: none; opacity: 0.95;
+}
+
+.resume-bar { background:#f3f4f6; padding:10px 14px; border-radius:8px; display:flex; gap:10px; align-items:center; font-size:13px; margin-bottom:14px; }
+.resume-bar input { flex:1; padding:6px 10px; }
+.resume-bar button { padding:6px 14px; }
+
+.phase2-confirm { margin: 20px 0; text-align:center; }
+.btn-confirm-p2 { background:var(--primary-gradient); color:white; border:none; padding:14px 40px; border-radius:var(--radius); font-size:16px; font-weight:700; cursor:pointer; box-shadow:0 4px 14px rgba(43,92,242,0.3); transition:all 0.15s; }
+.btn-confirm-p2:hover { transform:translateY(-2px); box-shadow:0 8px 22px rgba(43,92,242,0.38); }
+.btn-confirm-p2:disabled { opacity:0.6; cursor:not-allowed; transform:none; }
+
+/* === Confirm dialog === */
+#confirm_backdrop {
+  position: fixed; inset: 0; z-index: 100001;
+  background: rgba(15,23,42,0.55);
+  display: none; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity 0.18s;
+}
+#confirm_backdrop.show { display: flex; opacity: 1; }
+#confirm_box {
+  background: white; border-radius: var(--radius-lg);
+  padding: 26px 32px; max-width: 440px; width: 90%;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.3);
+  text-align: center;
+  transform: scale(0.92); transition: transform 0.18s;
+}
+#confirm_backdrop.show #confirm_box { transform: scale(1); }
+#confirm_box .cf-icon { font-size: 38px; margin-bottom: 8px; }
+#confirm_box .cf-title { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+#confirm_box .cf-msg { font-size: 13.5px; color: var(--muted); line-height: 1.55; margin-bottom: 20px; }
+#confirm_box .cf-actions { display: flex; gap: 10px; justify-content: center; }
+#confirm_box button {
+  padding: 10px 24px; border-radius: var(--radius); font-weight: 700; font-size: 13px; cursor: pointer; border: none;
+}
+#confirm_box .cf-cancel { background: white; color: var(--text); border: 2px solid var(--border-strong); }
+#confirm_box .cf-cancel:hover { border-color: var(--muted); }
+#confirm_box .cf-ok { background: var(--primary-gradient); color: white; box-shadow: 0 2px 8px rgba(43,92,242,0.25); }
+#confirm_box .cf-ok:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(43,92,242,0.35); }
+
+/* === Red error toast (centered) === */
+#err_toast {
+  position: fixed; left: 50%; top: 50%;
+  transform: translate(-50%, -50%) scale(0.92);
+  background: linear-gradient(135deg, #dc2626, #991b1b);
+  color: white; padding: 22px 36px;
+  border-radius: 14px; box-shadow: 0 16px 40px rgba(220, 38, 38, 0.4);
+  font-size: 17px; font-weight: 700; letter-spacing: 0.3px;
+  z-index: 100000; opacity: 0; pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  display: flex; align-items: center; gap: 14px;
+  white-space: pre-line; max-width: 90vw; text-align: center;
+}
+#err_toast.show {
+  opacity: 1; transform: translate(-50%, -50%) scale(1);
+  pointer-events: auto;
+}
+#err_toast .err-icon { font-size: 26px; }
+
+/* === Live QT Preview side-pane === */
+#prev_toggle {
+  position: fixed; top: 90px; right: 0; z-index: 9998;
+  background: var(--primary-gradient);
+  color: white; border: none; padding: 13px 18px;
+  border-radius: var(--radius) 0 0 var(--radius); font-weight: 700; font-size: 13px;
+  cursor: pointer; box-shadow: -2px 4px 14px rgba(43,92,242,0.25);
+  display: flex; align-items: center; gap: 6px;
+  transition: transform 0.15s;
+}
+#prev_toggle:hover { transform: translateX(-3px); box-shadow: -4px 6px 18px rgba(43,92,242,0.32); }
+#prev_pane {
+  position: fixed; top: 0; right: 0; height: 100vh;
+  width: 0; max-width: 720px; background: #f3f4f6;
+  box-shadow: -4px 0 16px rgba(20,30,60,0.12);
+  transition: width 0.25s ease; overflow: hidden; z-index: 9999;
+  display: flex; flex-direction: column;
+}
+#prev_pane.open { width: 45vw; }
+/* When pane is open, push body content into the LEFT 55vw — content naturally fills.
+   Using body padding-right means every block child (header, .container) flows into
+   the available width without needing per-element overrides. */
+body { transition: padding-right 0.25s; }
+body.preview-open { padding-right: 45vw; }
+body.preview-open .container {
+  max-width: none !important;
+  width: auto !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding: 0 28px;
+  transition: padding 0.25s;
+}
+body.preview-open header {
+  width: auto !important;
+}
+#prev_pane_head {
+  padding: 12px 16px; background: var(--primary-gradient); color: white;
+  display: flex; align-items: center; justify-content: space-between;
+  font-weight: 600; font-size: 13px;
+}
+#prev_pane_head button {
+  background: rgba(255,255,255,0.2); color: white; border: none;
+  padding: 7px 14px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12px;
+  margin-left: 6px; font-weight: 600;
+}
+#prev_pane_head button:hover { background: rgba(255,255,255,0.32); }
+@keyframes prev-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+#prev_pane_body { flex: 1; overflow: auto; padding: 8px; background: #e5e7eb; }
+#prev_pane_body iframe { width: 100%; min-height: 1080px; border: none; background: white; box-shadow: var(--shadow); border-radius: var(--radius-sm); }
+#prev_pane_empty { padding: 30px; text-align: center; color: #6b7280; font-size: 13px; }
+@media (max-width: 900px) {
+  #prev_pane.open { width: 100vw; }
+  /* On narrow screens, don't shrink the form — pane overlays fully */
+  body.preview-open .container, body.preview-open header { margin-right: 0; }
+}
+</style>
+</head>
+<body>
+<div id="err_toast" role="alert" onclick="hideErrToast()"><span class="err-icon">⚠</span><span id="err_toast_msg">กรุณาเลือกใหม่</span></div>
+<div id="confirm_backdrop" role="dialog">
+  <div id="confirm_box">
+    <div class="cf-icon" id="cf_icon">⚠</div>
+    <div class="cf-title" id="cf_title">ยืนยัน</div>
+    <div class="cf-msg" id="cf_msg"></div>
+    <div class="cf-actions">
+      <button type="button" class="cf-cancel" id="cf_cancel">Cancel</button>
+      <button type="button" class="cf-ok" id="cf_ok">ยืนยัน</button>
+    </div>
+  </div>
+</div>
+<!-- ====== DONE PAGE (shown after Phase 3 submit success) ====== -->
+<div id="done_page" style="display:none; min-height:100vh; padding:60px 24px 80px; background:linear-gradient(180deg, #eef2ff 0%, #f3e8ff 100%);">
+  <div style="max-width:560px; margin:0 auto; text-align:center;">
+    <div style="font-size:96px; line-height:1; margin-bottom:8px;">✅</div>
+    <h1 style="font-size:30px; margin:0 0 24px; color:var(--text); font-weight:800; background:var(--primary-gradient); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;">Submit สำเร็จ</h1>
+
+    <div style="background:white; border:1px solid #dee3f5; border-radius:var(--radius-lg); padding:28px 32px; box-shadow:var(--shadow-lg); margin-bottom:24px;">
+      <div style="font-size:11px; text-transform:uppercase; letter-spacing:1.2px; color:var(--muted); margin-bottom:8px; font-weight:600;">Request No.</div>
+      <div id="done_qtno" style="font-family:'JetBrains Mono', monospace; font-size:22px; font-weight:700; color:var(--text); word-break:break-all;">—</div>
+      <div style="margin-top:16px;">
+        <span style="display:inline-block; padding:7px 18px; background:var(--primary-gradient); color:white; border-radius:999px; font-size:13px; font-weight:700; letter-spacing:0.5px; box-shadow:0 2px 8px rgba(43,92,242,0.25);">
+          STATUS: QT REQUESTED ✓
+        </span>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+      <button type="button" onclick="openQtViewer()" class="btn-primary" style="padding:14px 28px; font-size:14px; border-radius:var(--radius);">
+        📄 ดู QT/SO Preview
+      </button>
+      <button type="button" onclick="startNewQT()" style="background:white; color:var(--text); border:2px solid var(--border-strong); padding:14px 28px; border-radius:var(--radius); font-size:14px; font-weight:700; cursor:pointer; transition:all 0.15s;" onmouseover="this.style.borderColor='var(--primary)';this.style.color='var(--primary)'" onmouseout="this.style.borderColor='var(--border-strong)';this.style.color='var(--text)'">
+        ＋ สร้าง QT/SO ใหม่
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== QT VIEWER MODAL (view-only, themed to match form) ====== -->
+<div id="qt_viewer" style="display:none; position:fixed; inset:0; z-index:99998; background:rgba(15,23,42,0.7); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding:20px;">
+  <div style="background:white; width:100%; max-width:1040px; height:94vh; border-radius:var(--radius-lg); display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(43,92,242,0.35); overflow:hidden; border:1px solid rgba(255,255,255,0.5);">
+    <!-- Themed header (matches main app header gradient) -->
+    <div style="padding:14px 22px; background:var(--primary-gradient); color:white; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; flex:1; min-width:0;">
+        <span style="font-weight:700; font-size:15px; letter-spacing:0.3px;">📄 QT/SO Preview</span>
+        <span id="qt_viewer_no" style="font-family:'JetBrains Mono', monospace; background:rgba(255,255,255,0.22); padding:4px 12px; border-radius:var(--radius-sm); font-size:12.5px; font-weight:600; border:1px solid rgba(255,255,255,0.25);"></span>
+        <span style="background:var(--success-soft); color:var(--success); padding:4px 12px; border-radius:999px; font-size:11px; font-weight:700; letter-spacing:0.5px;">✓ QT REQUESTED</span>
+      </div>
+      <span style="color:rgba(255,255,255,0.85); font-size:11.5px; display:inline-flex; align-items:center; gap:5px; white-space:nowrap;">🔒 View only — no download</span>
+      <button type="button" onclick="closeQtViewer()" style="background:rgba(255,255,255,0.2); color:white; border:1px solid rgba(255,255,255,0.3); padding:7px 16px; border-radius:var(--radius-sm); cursor:pointer; font-size:12px; font-weight:700; transition:all 0.15s; margin-left:auto; flex-shrink:0;" onmouseover="this.style.background='rgba(255,255,255,0.32)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">✕ ปิด</button>
+    </div>
+    <div id="qt_viewer_body" style="flex:1; overflow:auto; padding:20px; background:linear-gradient(180deg, var(--bg) 0%, #ffffff 100%); position:relative;"
+         oncontextmenu="return false;"
+         onkeydown="if(event.ctrlKey||event.metaKey){event.preventDefault();return false;}">
+      <div style="text-align:center; padding:30px; color:var(--muted); font-size:13px;">⏳ กำลังโหลด…</div>
+    </div>
+  </div>
+</div>
+
+<div id="login_overlay" style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(15,23,42,0.92); align-items:center; justify-content:center; flex-direction:column; color:white;">
+  <div style="background:white; color:var(--text); padding:36px 40px; border-radius:var(--radius-lg); text-align:center; box-shadow:0 24px 60px rgba(0,0,0,0.4); max-width:460px; width:90%;">
+    <div style="font-size:48px; margin-bottom:14px;">🔐</div>
+    <h2 style="margin:0 0 8px; font-size:22px;">เข้าสู่ระบบ</h2>
+    <p style="color:var(--muted); margin:0 0 24px; font-size:14px; line-height:1.6;">
+      กรุณาล็อกอินด้วย Lark ก่อนใช้งานระบบ<br>
+      <small>(ระบบจะใช้ชื่อของคุณเป็นผู้สร้าง QT/SO อัตโนมัติ)</small>
+    </p>
+    <a href="/api/auth/login" style="display:inline-block; background:var(--primary-gradient); color:white; padding:14px 32px; border-radius:var(--radius); font-weight:700; text-decoration:none; font-size:15px; box-shadow:0 4px 14px rgba(43,92,242,0.3);">
+      🚀 Login with Lark
+    </a>
+
+    <div style="margin-top:24px; padding-top:18px; border-top:1px dashed #e5e7eb;">
+      <button type="button" id="btn_dev_toggle" style="background:none; color:var(--muted); border:none; cursor:pointer; font-size:11.5px; text-decoration:underline;">
+        🧪 Dev Mode — pick a user (for testing)
+      </button>
+      <div id="dev_picker" style="display:none; margin-top:14px;">
+        <p style="margin:0 0 8px; font-size:11px; color:var(--warning);">
+          ⚠ Dev only — เลือกพนักงานเพื่อ mock เป็นผู้ใช้
+        </p>
+        <input id="dev_search" placeholder="พิมพ์ค้นหาชื่อ…" style="width:100%; padding:9px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px; margin-bottom:8px;">
+        <div id="dev_employee_list" style="max-height:420px; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius-sm); text-align:left;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<button id="prev_toggle" type="button" title="ดู QT/SO Preview">👁 QT/SO Preview</button>
+<aside id="prev_pane" aria-hidden="true">
+  <div id="prev_pane_head">
+    <span style="flex:1; min-width:0;">📄 QT/SO Preview</span>
+    <span id="prev_loading" style="display:none; font-size:15px; line-height:1; margin-right:4px; animation: prev-spin 1.6s linear infinite;" title="กำลังโหลด…">⏳</span>
+    <button type="button" id="prev_refresh">🔄 Refresh</button>
+    <button type="button" id="prev_close" style="margin-left:auto;">✕ ปิด</button>
+  </div>
+  <div id="prev_pane_body">
+    <div id="prev_pane_empty">กดปุ่ม 🔄 Refresh เพื่อดู preview ล่าสุด<br><small>หรือเปลี่ยนข้อมูลในฟอร์ม preview จะอัปเดตอัตโนมัติเมื่อหยุดพิมพ์</small></div>
+  </div>
+</aside>
+<header>
+  <div class="brand">
+    <h1>QT / SO Generator</h1>
+    <div class="sub">Ripples Commerce · Writes directly to Lark Base</div>
+  </div>
+  <div id="status">Loading…</div>
+</header>
+
+<div class="container">
+
+  <!-- ====== 3-PHASE STEPPER ====== -->
+  <div class="stepper" id="stepper">
+    <div class="step active" data-step="1"><span class="step-num">1</span> เลือกประเภท</div>
+    <span class="step-arrow">→</span>
+    <div class="step" data-step="2"><span class="step-num">2</span> QT/SO Booking</div>
+    <span class="step-arrow">→</span>
+    <div class="step" data-step="3"><span class="step-num">3</span> QT/SO Detail</div>
+  </div>
+
+  <!-- ====== PHASE 1: TYPE PICKER ====== -->
+  <div id="phase1_wrap">
+    <div class="resume-bar">
+      <span>🔁 มี QT/SO อยู่แล้ว?</span>
+      <input id="resume_no" placeholder="พิมพ์เลข QT ID (เช่น QTRPL-20260608-01006) เพื่อเปิดมาแก้ไข">
+      <button type="button" id="btn_resume">Load</button>
+    </div>
+    <div class="type-picker">
+      <div class="type-card" id="pick_noncontract">
+        <div class="ico">📝</div>
+        <div class="ttl">Non-Contract</div>
+        <div class="dsc">QT/SO ปกติ — กรอก booking ก่อน แล้วค่อยกรอกรายละเอียด</div>
+      </div>
+      <div class="type-card disabled" id="pick_contract">
+        <div class="ico">📋</div>
+        <div class="ttl">Contract</div>
+        <div class="dsc">QT/SO แบบสัญญา</div>
+        <div class="badge-soon">⚠ Coming soon</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== BACK BUTTON (Phase 2 → Phase 1) — only when QT not yet created ====== -->
+  <div id="phase2_back_wrap" class="phase-section" data-phase="2" style="display:none; margin-bottom:-6px;">
+    <button type="button" id="btn_back_phase1"
+      style="background:transparent; color:var(--muted); border:1px solid var(--border); padding:7px 14px; border-radius:var(--radius-sm); font-size:12px; font-weight:600; cursor:pointer; transition:all 0.15s; display:inline-flex; align-items:center; gap:6px;"
+      onmouseover="this.style.background='var(--primary-soft)';this.style.color='var(--primary)';this.style.borderColor='var(--primary)'"
+      onmouseout="this.style.background='transparent';this.style.color='var(--muted)';this.style.borderColor='var(--border)'">
+      ← กลับไปเลือกประเภท
+    </button>
+  </div>
+
+  <!-- HEADER / DOCUMENT INFO -->
+  <div class="card phase-section" data-phase="2" style="display:none;">
+    <h2>Document Header</h2>
+    <div class="grid grid-3">
+      <div>
+        <label class="req">Document Type</label>
+        <select id="doc_type">
+          <option>Quotation</option>
+          <option>Sales Order</option>
+        </select>
+      </div>
+      <div>
+        <label>Company</label>
+        <select id="company">
+          <option>RPL : RIPPLES COMMERCE</option>
+        </select>
+      </div>
+      <div>
+        <label class="req">Type of Work</label>
+        <select id="type_of_work" required>
+          <option value="AWO" selected>AWO</option>
+          <option value="Campaign">Campaign</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-top: 14px;">
+      <label class="req">Created by (ล็อกจาก Lark login)</label>
+      <div id="created_by_display" style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--primary-gradient-soft); border:1px solid #dee3f5; border-radius:var(--radius-sm);">
+        <span id="cb_avatar"></span>
+        <div style="flex:1;">
+          <div id="cb_name" style="font-weight:600; color:var(--text);">—</div>
+          <div id="cb_meta" style="font-size:11px; color:var(--muted);"></div>
+        </div>
+        <!-- Login state badge — toggled by setLoggedInUser / setLoggedOut -->
+        <span id="cb_logged_in" style="display:none; background:var(--success-soft); color:var(--success); padding:3px 10px; border-radius:999px; font-size:11px; font-weight:600;">🔒 Lark Login</span>
+        <a id="cb_login_btn" href="/api/auth/login" style="display:inline-block; background:linear-gradient(135deg,#2b5cf2,#6c4cf3); color:white; padding:6px 14px; border-radius:var(--radius-sm); font-size:12px; font-weight:700; text-decoration:none; box-shadow:0 2px 8px rgba(43,92,242,0.25);">🔓 Login with Lark</a>
+        <button type="button" id="btn_logout" style="background:white; color:var(--danger); border:1px solid #fca5a5; padding:5px 12px; border-radius:var(--radius-sm); font-size:11px; cursor:pointer; font-weight:600; display:none;">Logout</button>
+      </div>
+      <input type="hidden" id="created_by_open_id">
+      <input type="hidden" id="created_by">
+    </div>
+
+    <div class="grid grid-2" style="margin-top: 14px;">
+      <div>
+        <label class="req">Brand Company (type to search)</label>
+        <div style="position:relative;">
+          <input id="brand_company" autocomplete="off" placeholder="พิมพ์ชื่อ brand หรือ company เพื่อค้นหา…">
+          <div id="brand_company_dropdown" class="custom-dropdown"></div>
+        </div>
+        <div class="info-card" id="brand_company_card"></div>
+      </div>
+      <div>
+        <label>Customer PIC (type to search)</label>
+        <div style="position:relative;">
+          <input id="customer_pic" autocomplete="off" placeholder="พิมพ์ชื่อ Customer PIC หรือคลิกเพื่อเลือก…">
+          <div id="customer_pic_dropdown" class="custom-dropdown"></div>
+        </div>
+        <div class="info-card" id="customer_card"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CURRENCY & PERIOD (own card, BEFORE Ripples Staff) -->
+  <div class="card phase-section" data-phase="2" style="display:none;">
+    <h2>Currency &amp; Period</h2>
+    <div class="grid grid-4">
+      <div>
+        <label class="req">Currency</label>
+        <select id="currency" onchange="updateExchangeRate()">
+          <option>THB</option><option>USD</option><option>CNY</option><option>VND</option>
+        </select>
+      </div>
+      <div id="exchange_rate_wrap">
+        <label>Exchange Rate (THB per unit · editable)</label>
+        <input id="exchange_rate" type="number" step="0.0001" value="1">
+        <div class="muted-line" id="rate_hint"></div>
+      </div>
+      <div>
+        <label>Credit Term (days)</label>
+        <select id="credit_term">
+          <option value="">— Pick Brand first —</option>
+        </select>
+        <div class="muted-line" id="credit_term_hint"></div>
+      </div>
+      <div style="position:relative;">
+        <label class="req">Start (Month / Year)</label>
+        <button type="button" id="start_picker_btn" onclick="MYPicker.toggle('start')"
+                style="width:100%; padding:9px 12px; background:white; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13.5px; cursor:pointer; text-align:left; display:flex; align-items:center; justify-content:space-between;">
+          <span id="start_picker_label" style="color:var(--muted);">— Pick Month / Year —</span>
+          <span style="color:var(--muted); font-size:11px;">▾</span>
+        </button>
+        <div id="start_picker_pop" class="myp-pop"></div>
+        <input id="start_date" type="hidden">
+        <input id="start_month" type="hidden">
+        <input id="start_year" type="hidden">
+      </div>
+      <div style="position:relative;">
+        <label class="req">End (Month / Year)</label>
+        <button type="button" id="end_picker_btn" onclick="MYPicker.toggle('end')"
+                style="width:100%; padding:9px 12px; background:white; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13.5px; cursor:pointer; text-align:left; display:flex; align-items:center; justify-content:space-between;">
+          <span id="end_picker_label" style="color:var(--muted);">— Pick Month / Year —</span>
+          <span style="color:var(--muted); font-size:11px;">▾</span>
+        </button>
+        <div id="end_picker_pop" class="myp-pop"></div>
+        <input id="end_date" type="hidden">
+        <input id="end_month" type="hidden">
+        <input id="end_year" type="hidden">
+      </div>
+    </div>
+    <div style="margin-top:14px;">
+      <label>Period</label>
+      <div id="period_display"
+           style="padding:9px 12px; background:var(--primary-gradient-soft); border:1px solid #dee3f5; border-radius:var(--radius-sm); font-size:13.5px; color:var(--muted); min-height:38px;">
+        — Pick Start &amp; End —
+      </div>
+    </div>
+  </div>
+
+  <!-- RIPPLES STAFF -->
+  <div class="card phase-section" data-phase="2" style="display:none;">
+    <h2>Ripples Staff</h2>
+    <div>
+      <label class="req">Approver (Ripples manager)</label>
+      <div style="position:relative;">
+        <input id="approver" autocomplete="off" placeholder="Type approver name…" required>
+        <div id="approver_dropdown" class="custom-dropdown"></div>
+      </div>
+      <div class="info-card" id="approver_card"></div>
+    </div>
+  </div>
+
+  <!-- BRAND'S CONFIRM ATTACHMENTS (Phase 2) -->
+  <div class="card phase-section" data-phase="2" style="display:none;">
+    <h2>Brand's Confirm <span style="font-size:11px; color:#9ca3af; font-weight:500; text-transform:none; letter-spacing:0; margin-left:4px;">(optional — แนบเอกสารยืนยันจากแบรนด์)</span></h2>
+    <input id="att_input" type="file" multiple style="display:none;" onchange="handleAttachUpload(this.files)">
+    <button class="btn-ghost" type="button" onclick="document.getElementById('att_input').click()">＋ Choose file(s)</button>
+    <span style="margin-left: 12px; font-size: 12px; color: var(--muted);">PDF / รูปภาพ</span>
+    <div id="att_list" style="margin-top: 12px;"></div>
+  </div>
+
+  <!-- ====== QT BANNER + EDIT BUTTON (shown after Confirm, when Phase 2 is locked) ====== -->
+  <div id="phase2_edit_wrap" style="display:none; margin: 8px 0 18px;">
+    <div id="qt_banner" class="qt-banner" style="display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap; padding:14px 22px;">
+      <span style="white-space:nowrap;">✓ QT/SO สร้างแล้ว: <span class="qt-no" id="banner_qtno">—</span></span>
+      <button type="button" id="btn_edit_phase2" style="background:white; color:var(--primary); border:2px solid var(--primary); padding:8px 18px; border-radius:var(--radius-sm); font-size:12.5px; font-weight:700; cursor:pointer; transition:all 0.15s; margin-left:0;" onmouseover="this.style.background='var(--primary-soft)';this.style.transform='translateY(-1px)'" onmouseout="this.style.background='white';this.style.transform=''">
+        ✎ EDIT Booking
+      </button>
+      <button type="button" id="btn_restart" style="margin-left:0;">Cancel</button>
+    </div>
+  </div>
+
+  <!-- AM OUTSOURCE (applies to all line items) -->
+  <div class="card phase-section" data-phase="3" style="display:none;">
+    <h2>AM Outsource <span style="font-size:11px; color:#9ca3af; font-weight:500; text-transform:none; letter-spacing:0; margin-left:4px;">(optional)</span></h2>
+    <label style="display:flex; align-items:center; gap:8px; text-transform:none; letter-spacing:0; font-size:13.5px; font-weight:500; color:var(--text); cursor:pointer; margin-bottom: 0;">
+      <input type="checkbox" id="am_outsourced" style="width:auto; margin:0;" onchange="toggleAMSection(this.checked)">
+      AM Outsourced — ติ๊กถ้ามี AM Outsource สำหรับ QT/SO นี้
+    </label>
+    <div id="am_extra" style="display:none; margin-top: 14px;">
+      <div class="grid grid-2">
+        <div>
+          <label>เหตุผลที่ AM Outsource *</label>
+          <select id="am_reason">
+            <option value="">— Select reason —</option>
+            <option>BU is at full capacity</option>
+            <option>Work is not within BU scope</option>
+            <option>BU work is not up to brands standard</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div>
+          <label>อธิบายเหตุผลที่ AM Outsource *</label>
+          <input id="am_reason_detail" placeholder="Reason details…">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BILLING TIMING -->
+  <div class="card phase-section" data-phase="3" style="display:none;">
+    <h2>Billing Timing</h2>
+    <label class="req">เก็บเงินได้เลยไหม</label>
+    <select id="can_bill_now">
+      <option value="">— Select —</option>
+      <option>เก็บเงินได้เลย</option>
+      <option>จำเป็นต้องทำงานให้เสร็จก่อน</option>
+    </select>
+  </div>
+
+  <!-- MEMO & PROJECT (restored to original position — Project Link only) -->
+  <div class="card phase-section" data-phase="3" style="display:none;">
+    <h2>Memo &amp; Project</h2>
+    <label style="display:flex; align-items:center; gap:8px; text-transform:none; letter-spacing:0; font-size:13.5px; font-weight:500; color:var(--text); cursor:pointer; margin-bottom:0;">
+      <input type="checkbox" id="memo_done" style="width:auto; margin:0;" onchange="toggleMemoSection(this.checked)">
+      ทำ Memo Project Request แล้วหรือยัง
+    </label>
+
+    <div id="memo_extra" style="display:none; margin-top:14px;">
+      <div class="grid grid-2">
+        <div>
+          <label>Filter by BU (optional)</label>
+          <select id="project_bu_filter" onchange="refreshProjectList()">
+            <option value="">— All BU —</option>
+          </select>
+        </div>
+        <div>
+          <label>Project Link (type to search)</label>
+          <input id="project_link" list="project_list" autocomplete="off" placeholder="Search by project name / brand…">
+          <datalist id="project_list"></datalist>
+        </div>
+      </div>
+      <div class="muted-line" id="project_info" style="margin-top:6px;"></div>
+    </div>
+  </div>
+
+  <!-- LINE ITEMS -->
+  <div class="card phase-section" data-phase="3" style="display:none;">
+    <h2>Line Items</h2>
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th style="width: 14%;">BU <span style="color:var(--danger);">*</span></th>
+          <th style="width: 30%;">Item (filtered by BU) <span style="color:var(--danger);">*</span></th>
+          <th style="width: 22%;">Item Description <span style="color:var(--danger);">*</span></th>
+          <th style="width: 7%;" class="num">Qty <span style="color:var(--danger);">*</span></th>
+          <th style="width: 11%;" class="num">Unit Price <span style="color:var(--danger);">*</span></th>
+          <th style="width: 11%;" class="num">Amount</th>
+          <th style="width: 160px; min-width: 150px;">Month / Year <span style="color:var(--danger);">*</span></th>
+          <th style="width: 36px;"></th>
+        </tr>
+      </thead>
+      <tbody id="items_body"></tbody>
+    </table>
+    <div style="margin-top: 12px;">
+      <button class="btn-ghost" onclick="addLine()">＋ Add line</button>
+    </div>
+
+    <div class="totals-card">
+      <div class="row"><span class="label">มูลค่าสินค้า / Total amount</span><span class="num" id="t_sub">0.00</span></div>
+      <div class="row" id="t_discount_row" style="display:none;"><span class="label" style="color:var(--danger);">ส่วนลด / Discount</span><span class="num" id="t_discount" style="color:var(--danger);">0.00</span></div>
+      <div class="row"><span class="label">ราคาสุทธิ / Net total</span><span class="num" id="t_net">0.00</span></div>
+      <div class="row"><span class="label">ภาษีมูลค่าเพิ่ม / Vat (7%)</span><span class="num" id="t_vat">0.00</span></div>
+      <div class="row grand"><span class="label">จำนวนเงินสุทธิ / Grand total</span><span class="num" id="t_grand">0.00</span></div>
+    </div>
+  </div>
+
+  <!-- ====== PHASE 2 → 3 CONFIRM BUTTON (ล่างสุดของ Phase 2) ====== -->
+  <div class="phase2-confirm phase-section" data-phase="2" style="display:none;">
+    <button type="button" id="btn_confirm_phase2" class="btn-confirm-p2">
+      ✓ Confirm Booking &amp; สร้าง QT/SO
+    </button>
+  </div>
+
+  <!-- REMARK + SUBMIT -->
+  <div class="card phase-section" data-phase="3" style="display:none;">
+    <h2>Internal Note &amp; Submit</h2>
+    <label>Remark (optional, internal use only)</label>
+    <textarea id="remark" rows="2" placeholder="Discount note, special terms, etc. (e.g. 'Discount: 5000')"></textarea>
+    <div class="actions" style="margin-top: 16px;">
+      <span id="submit_status"></span>
+      <button class="btn-primary" id="submit_btn" type="button" onclick="submitPhase3()">Submit QT</button>
+    </div>
+  </div>
+
+
+</div>
+
+<script>
+const state = {
+  brandCompanies: [],
+  customers: [],
+  items: [],
+  employees: [],
+  allEmployees: [],
+  projects: [],
+  lines: [],
+};
+
+function setStatus(msg, ok = true) {
+  const el = document.getElementById('status');
+  if (!el) return;
+  // Decide state from message content: loading vs done vs error
+  let cls, icon;
+  if (!ok) {
+    cls = 'err'; icon = '✕';
+  } else if (/^✓|สำเร็จ|พร้อม|Ready|กลับมาแล้ว/i.test(msg)) {
+    cls = 'ok'; icon = '✓';
+  } else {
+    cls = 'loading'; icon = '⏳';
+  }
+  el.className = cls;
+  el.innerHTML = `<span class="status-icon">${icon}</span>`;
+  el.title = msg;
+  el.setAttribute('aria-label', msg);
+}
+
+async function fetchJSON(url, opts) {
+  const r = await fetch(url, opts);
+  if (!r.ok) throw new Error(`${url} -> ${r.status}`);
+  return r.json();
+}
+
+// Exchange rates (THB per 1 unit of selected currency). Loaded on bootstrap.
+const FX = { THB: 1, USD: null, CNY: null, VND: null };
+
+async function loadExchangeRates() {
+  // Server-side proxy avoids browser CORS issues
+  try {
+    const r = await fetch('/api/exchange-rates');
+    if (!r.ok) throw new Error('rate fetch failed');
+    const data = await r.json();
+    for (const c of ['USD','CNY','VND']) {
+      if (data[c]) FX[c] = data[c];
+    }
+  } catch (e) {
+    // Final fallback to recent approximations
+    FX.USD = 35.0; FX.CNY = 4.85; FX.VND = 0.0014;
+  }
+}
+
+function updateExchangeRate() {
+  const cur = document.getElementById('currency').value;
+  const rate = FX[cur];
+  const inp = document.getElementById('exchange_rate');
+  const hint = document.getElementById('rate_hint');
+  const wrap = document.getElementById('exchange_rate_wrap');
+  // THB is the base currency → hide Exchange Rate field entirely
+  if (cur === 'THB') {
+    inp.value = 1;
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = '';
+  if (rate !== null && rate !== undefined) {
+    inp.value = rate;
+    hint.textContent = `Auto-set: 1 ${cur} ≈ ${rate} THB (editable)`;
+    hint.style.color = 'var(--primary)';
+  } else {
+    hint.textContent = 'Rate not available — enter manually';
+    hint.style.color = 'var(--warning)';
+  }
+}
+
+// Disable browser autocomplete (typed-history suggestions) for ALL inputs.
+// Datalist-backed inputs keep their datalist suggestions because they bind by `list=`,
+// not by browser history.
+function disableAutocomplete() {
+  document.querySelectorAll('input, textarea').forEach(el => {
+    el.setAttribute('autocomplete', 'off');
+    // Random name prevents Chrome from showing autofill from same-named inputs across sites
+    if (!el.name) el.name = 'no-autofill-' + Math.random().toString(36).slice(2, 9);
+  });
+}
+window.addEventListener('DOMContentLoaded', disableAutocomplete);
+
+function setLoggedInUser(u) {
+  state.currentUser = u;
+  document.getElementById('created_by').value = u.en_name || u.name || '';
+  document.getElementById('created_by_open_id').value = u.open_id || '';
+  document.getElementById('cb_name').textContent = u.en_name || u.name || '—';
+  // Show whether the session has a real Lark OAuth token (required to bypass
+  // field-level protection on the prod base) or is just a dev-mode session.
+  const hasToken = !!u.has_user_token;
+  document.getElementById('cb_meta').textContent = hasToken
+    ? 'มี Lark token — เขียนได้ทุก field'
+    : 'Dev mode — บาง field จะ skip (Item / BU / desc_mode)';
+  document.getElementById('cb_meta').style.color = hasToken ? 'var(--success)' : '#b45309';
+  // Toggle badge + login button + logout
+  const badge = document.getElementById('cb_logged_in');
+  const loginBtn = document.getElementById('cb_login_btn');
+  const logoutBtn = document.getElementById('btn_logout');
+  if (badge) badge.style.display = hasToken ? 'inline-block' : 'none';
+  if (loginBtn) loginBtn.style.display = hasToken ? 'none' : 'inline-block';
+  if (loginBtn && !hasToken) loginBtn.textContent = '🔓 Upgrade to Lark Login';
+  if (logoutBtn) logoutBtn.style.display = 'inline-block';
+  const av = document.getElementById('cb_avatar');
+  if (u.avatar_url) {
+    av.innerHTML = `<img src="${escapeAttr(u.avatar_url)}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;" alt="">`;
+  } else {
+    const initial = (u.en_name || u.name || '?')[0].toUpperCase();
+    av.innerHTML = `<span style="display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#2b5cf2,#6c4cf3);color:white;font-weight:700;">${escapeHtml(initial)}</span>`;
+  }
+}
+
+async function bootstrap() {
+  // Login is OPTIONAL — never redirect automatically. The Lark "Login" button
+  // in the header lets the user opt in. We don't auto-redirect because
+  // a misconfigured Lark redirect URL (error 20029) would trap the user on
+  // Lark's error page with no way back to our form. Always show form first.
+  setStatus('Loading…');
+  try {
+    const me = await fetchJSON('/api/me');
+    if (me.logged_in) {
+      setLoggedInUser(me);
+    }
+    // Clean any leftover ?auth_error=... param from a previous failed callback
+    if (new URLSearchParams(location.search).has('auth_error')) {
+      history.replaceState({}, '', location.pathname);
+    }
+  } catch (e) {
+    // ignore — keep UI usable
+  }
+  setStatus('Loading from Lark Base…');
+  try {
+    const [bc, cu, it, ap, pj, ae] = await Promise.all([
+      fetchJSON('/api/brand-companies'),
+      fetchJSON('/api/customers'),
+      fetchJSON('/api/items'),
+      fetchJSON('/api/approvers'),
+      fetchJSON('/api/projects').catch(()=>[]),
+      fetchJSON('/api/all-employees').catch(()=>[]),
+      loadExchangeRates(),
+    ]);
+    state.brandCompanies = bc;
+    state.customers = cu;
+    state.items = it;
+    state.employees = ap;
+    state.allEmployees = ae || [];
+    state.projects = pj || [];
+    populateBrandCompanies();
+    populateCustomers();
+    populateApprovers();
+    populateCreatedBy();
+    populateProjects();
+    updateExchangeRate();  // hide Exchange Rate if Currency starts as THB
+    // Re-render any line items that were rendered before state.items finished loading.
+    // This protects against race conditions where renderLines() ran with an empty buList().
+    if (state.lines && state.lines.length && typeof renderLines === 'function') {
+      renderLines();
+    }
+    setStatus('✓ Ready');
+    // Try resuming first; only add a default empty line if nothing was restored.
+    if (PhaseState.recordId) {
+      await resumeQtFromLark(PhaseState.recordId);
+    } else {
+      if (restoreDraft()) {
+        setStatus('✓ ดึงข้อมูลที่กรอกค้างกลับมาแล้ว');
+      }
+    }
+    // Ensure exactly one empty line if nothing was loaded (no draft, no resume)
+    if (!state.lines || !state.lines.length) {
+      addLine();
+    }
+  } catch (e) {
+    setStatus('✗ Failed: ' + e.message, false);
+  }
+}
+
+function renderBrandDropdown(filter) {
+  const dd = document.getElementById('brand_company_dropdown');
+  if (!dd) return;
+  const q = (filter || '').toLowerCase().trim();
+  const terms = q.split(/\s+/).filter(Boolean);
+  const list = state.brandCompanies.filter(b => {
+    if (!terms.length) return true;
+    const haystack = [b.name, b.brand, b.company, b.tax_id].filter(Boolean).join(' ').toLowerCase();
+    return terms.every(t => haystack.includes(t));
+  });
+  if (!list.length) {
+    dd.innerHTML = '<div class="cd-empty">ไม่พบ brand ที่ตรงกับคำค้น</div>';
+    return;
+  }
+  // Header showing count
+  const header = `<div style="padding:6px 12px; background:var(--primary-soft); color:var(--primary); font-size:11px; font-weight:600; border-bottom:1px solid var(--border);">${list.length} brand(s)</div>`;
+  dd.innerHTML = header + list.map(b => {
+    const initial = (b.brand || b.name || '?')[0].toUpperCase();
+    const meta = [b.company, b.brand && `Brand: ${b.brand}`].filter(Boolean).join(' · ');
+    return `<div class="cd-item" data-name="${escapeAttr(b.name)}">
+      <div class="cd-avatar-placeholder">${escapeHtml(initial)}</div>
+      <div style="min-width:0;">
+        <div class="cd-name">${escapeHtml(b.name)}</div>
+        ${meta ? `<div class="cd-meta">${escapeHtml(meta)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+  dd.querySelectorAll('.cd-item').forEach(it => {
+    it.addEventListener('mousedown', (ev) => {
+      ev.preventDefault();
+      const inp = document.getElementById('brand_company');
+      inp.value = it.dataset.name;
+      dd.classList.remove('open');
+      inp.dispatchEvent(new Event('input', {bubbles: true}));
+      inp.blur();
+    });
+  });
+}
+
+function populateBrandCompanies() {
+  const inp = document.getElementById('brand_company');
+  const dd = document.getElementById('brand_company_dropdown');
+  const card = document.getElementById('brand_company_card');
+  if (!inp || !dd) return;
+  let prevValue = '';
+  const openDropdown = () => {
+    prevValue = inp.value || prevValue;
+    renderBrandDropdown('');
+    dd.classList.add('open');
+  };
+  // Only open on explicit user click — NOT on focus (avoids auto-open during page
+  // restore/programmatic focus). Use 'click' so it fires after mousedown+focusin completes.
+  inp.addEventListener('click', openDropdown);
+  inp.addEventListener('blur', () => {
+    setTimeout(() => {
+      dd.classList.remove('open');
+      if (!inp.value && prevValue) inp.value = prevValue;
+    }, 150);
+  });
+  inp.addEventListener('input', (ev) => {
+    // Only re-open dropdown for REAL typing (isTrusted). Synthetic events
+    // from selecting an option shouldn't re-pop the dropdown.
+    if (ev && ev.isTrusted) {
+      renderBrandDropdown(inp.value);
+      dd.classList.add('open');
+    } else {
+      dd.classList.remove('open');
+    }
+    const b = state.brandCompanies.find(x => x.name === inp.value);
+    const ctSel = document.getElementById('credit_term');
+    const ctHint = document.getElementById('credit_term_hint');
+    if (!b) {
+      card.classList.remove('show'); card.innerHTML = '';
+      ctSel.value = ''; ctHint.textContent = '';
+      refreshCustomerList(); refreshProjectList(); return;
+    }
+    card.classList.add('show');
+    const ctList = (b.credit_terms || []).join(', ');
+    card.innerHTML = `
+      <div class="ic-name">${escapeHtml(b.name)} ${b.brand ? `<span class="ic-badge">${escapeHtml(b.brand)}</span>` : ''}</div>
+      ${b.company ? `<div class="ic-row"><b>Company:</b> ${escapeHtml(b.company)}</div>` : ''}
+      ${b.address ? `<div class="ic-row"><b>Address:</b> ${escapeHtml(b.address)}</div>` : ''}
+      ${b.tax_id ? `<div class="ic-row"><b>Tax ID:</b> ${escapeHtml(b.tax_id)}</div>` : ''}
+      ${b.tel ? `<div class="ic-row"><b>Tel:</b> ${escapeHtml(b.tel)}</div>` : ''}
+      ${ctList ? `<div class="ic-row"><b>Credit Term:</b> ${escapeHtml(ctList)}${b.credit_term_special ? ' · ' + escapeHtml(b.credit_term_special) : ''}</div>` : ''}
+    `;
+    // Strict mode: dropdown shows ONLY the brand's own credit terms.
+    // Auto-select first one. If brand has multiple, all are listed so user can switch.
+    const brandTerms = b.credit_terms || [];
+    if (brandTerms.length) {
+      ctSel.innerHTML = brandTerms.map(t =>
+        `<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`).join('');
+      ctSel.value = brandTerms[0];
+      ctHint.textContent = brandTerms.length > 1
+        ? `Auto-set to "${brandTerms[0]}" · brand also allows: ${brandTerms.slice(1).join(', ')}`
+        : `Auto-set from brand`;
+      ctHint.style.color = 'var(--primary)';
+    } else {
+      ctSel.innerHTML = '<option value="">— No credit term on this brand —</option>';
+      ctSel.value = '';
+      ctHint.textContent = b.credit_term_special
+        ? `Special: ${b.credit_term_special}`
+        : 'No credit term set on this brand';
+      ctHint.style.color = 'var(--muted)';
+    }
+    refreshCustomerList();
+    refreshProjectList();
+  });
+}
+
+// Filter Customer PIC list to those matching the currently-selected Brand Company
+function _filteredCustomersForCurrentBrand() {
+  const bcName = document.getElementById('brand_company').value;
+  const bc = state.brandCompanies.find(x => x.name === bcName);
+  const brand = bc ? (bc.brand || (bcName.split('-')[0] || '').trim()) : '';
+  const company = bc ? bc.company : '';
+  const norm = s => (s || '').toLowerCase().trim();
+  if (!brand) return [];
+  return state.customers.filter(c =>
+    norm(c.brand) === norm(brand) ||
+    norm(c.name).startsWith(norm(brand) + ':') ||
+    (company && norm(c.name).includes(norm(company)))
+  );
+}
+
+function renderCustomerDropdown(filter) {
+  const dd = document.getElementById('customer_pic_dropdown');
+  if (!dd) return;
+  const q = (filter || '').toLowerCase().trim();
+  const terms = q.split(/\s+/).filter(Boolean);
+  let list = _filteredCustomersForCurrentBrand();
+  if (terms.length) {
+    list = list.filter(c => {
+      const haystack = [c.name, c.pic, c.brand, c.email].filter(Boolean).join(' ').toLowerCase();
+      return terms.every(t => haystack.includes(t));
+    });
+  }
+  if (!list.length) {
+    const bc = document.getElementById('brand_company').value;
+    const msg = bc ? 'ไม่พบ Customer PIC ที่ตรงกับคำค้น' : 'กรุณาเลือก Brand Company ก่อน';
+    dd.innerHTML = `<div class="cd-empty">${msg}</div>`;
+    return;
+  }
+  const header = `<div style="padding:6px 12px; background:var(--primary-soft); color:var(--primary); font-size:11px; font-weight:600; border-bottom:1px solid var(--border);">${list.length} contact(s)</div>`;
+  dd.innerHTML = header + list.map(c => {
+    const initial = (c.name || '?')[0].toUpperCase();
+    const meta = [c.brand && `Brand: ${c.brand}`, c.email].filter(Boolean).join(' · ');
+    return `<div class="cd-item" data-name="${escapeAttr(c.name)}">
+      <div class="cd-avatar-placeholder">${escapeHtml(initial)}</div>
+      <div style="min-width:0;">
+        <div class="cd-name">${escapeHtml(c.name)}</div>
+        ${meta ? `<div class="cd-meta">${escapeHtml(meta)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+  dd.querySelectorAll('.cd-item').forEach(it => {
+    it.addEventListener('mousedown', (ev) => {
+      ev.preventDefault();
+      const inp = document.getElementById('customer_pic');
+      inp.value = it.dataset.name;
+      dd.classList.remove('open');
+      inp.dispatchEvent(new Event('input', {bubbles: true}));
+      inp.blur();
+    });
+  });
+}
+
+function refreshCustomerList() {
+  // Update placeholder hint based on current brand
+  const picInp = document.getElementById('customer_pic');
+  if (!picInp) return;
+  const filtered = _filteredCustomersForCurrentBrand();
+  const bcName = document.getElementById('brand_company').value;
+  if (!bcName) picInp.placeholder = 'Pick a Brand Company first';
+  else if (!filtered.length) picInp.placeholder = `No contact for "${bcName.split('-')[0]}" — type a name manually`;
+  else picInp.placeholder = `${filtered.length} contact(s) — click to choose`;
+  // Clear PIC if it no longer matches the new brand's list
+  if (picInp.value && !filtered.some(c => c.name === picInp.value)) {
+    picInp.value = '';
+    document.getElementById('customer_card').classList.remove('show');
+  }
+}
+
+function populateCustomers() {
+  const inp = document.getElementById('customer_pic');
+  const dd = document.getElementById('customer_pic_dropdown');
+  const card = document.getElementById('customer_card');
+  if (!inp || !dd) return;
+  inp.placeholder = 'Pick a Brand Company first';
+  let prevValue = '';
+  const openDropdown = () => {
+    prevValue = inp.value || prevValue;
+    renderCustomerDropdown('');
+    dd.classList.add('open');
+  };
+  // Only open on explicit user click — NOT on focus (avoids auto-open during page
+  // restore/programmatic focus). Use 'click' so it fires after mousedown+focusin completes.
+  inp.addEventListener('click', openDropdown);
+  inp.addEventListener('blur', () => {
+    setTimeout(() => {
+      dd.classList.remove('open');
+      if (!inp.value && prevValue) inp.value = prevValue;
+    }, 150);
+  });
+  inp.addEventListener('input', (ev) => {
+    if (ev && ev.isTrusted) {
+      renderCustomerDropdown(inp.value);
+      dd.classList.add('open');
+    } else {
+      dd.classList.remove('open');
+    }
+    const c = state.customers.find(x => x.name === inp.value);
+    if (!c) { card.classList.remove('show'); card.innerHTML = ''; return; }
+    card.classList.add('show');
+    card.innerHTML = `
+      <div class="ic-name">${escapeHtml(c.name)} ${c.status ? `<span class="ic-badge">${escapeHtml(c.status)}</span>` : ''}</div>
+      ${c.pic ? `<div class="ic-row"><b>PIC:</b> ${escapeHtml(c.pic)}</div>` : ''}
+      ${c.brand ? `<div class="ic-row"><b>Brand:</b> ${escapeHtml(c.brand)}</div>` : ''}
+      ${c.email ? `<div class="ic-row"><b>Email:</b> ${escapeHtml(c.email)}</div>` : ''}
+      ${c.tel ? `<div class="ic-row"><b>Tel:</b> ${escapeHtml(c.tel)}</div>` : ''}
+    `;
+  });
+}
+
+function findApprover(name) {
+  if (!name) return null;
+  const n = name.trim().toLowerCase();
+  const norm = s => (s || '').trim().toLowerCase();
+  const all = state.employees;
+  return all.find(x => x.name === name || x.en_name === name || x.lark_name === name)
+      || all.find(x => norm(x.en_name) === n || norm(x.lark_name) === n || norm(x.name) === n)
+      || all.find(x => norm(x.en_name).startsWith(n) || norm(x.lark_name).startsWith(n) || norm(x.name).startsWith(n))
+      || null;
+}
+
+function populateProjects() {
+  const inp = document.getElementById('project_link');
+  const info = document.getElementById('project_info');
+  if (!inp) return;
+  // Initial state — empty (will populate after brand is picked)
+  document.getElementById('project_list').innerHTML = '';
+  inp.placeholder = 'Pick a Brand Company first';
+  // Click-to-clear-and-restore pattern — lets user re-open the full list after picking
+  let prev = '';
+  const clearForBrowse = () => {
+    prev = inp.value || prev;
+    if (inp.value) inp.value = '';
+  };
+  inp.addEventListener('mousedown', clearForBrowse);
+  inp.addEventListener('focus', clearForBrowse);
+  inp.addEventListener('blur', () => {
+    if (!inp.value && prev) inp.value = prev;
+  });
+  inp.addEventListener('input', () => {
+    const p = state.projects.find(x => x.name === inp.value);
+    if (!p) { info.textContent = ''; return; }
+    info.textContent = [p.brand, p.period, p.item_code, p.item_description]
+      .filter(Boolean).join(' · ');
+  });
+}
+
+// Parse project name "brand Mon YYYY BU — desc" → sort key (year, month#, BU, name)
+const PROJECT_MONTH_NUM = {Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
+function projectSortKey(p) {
+  const name = p.name || '';
+  // Look for "MMM YYYY BU" pattern anywhere in the name
+  const m = name.match(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})\s+([A-Z]{2,4})\b/);
+  if (m) {
+    return [parseInt(m[2], 10), PROJECT_MONTH_NUM[m[1]] || 0, m[3], name.toLowerCase()];
+  }
+  // Fallback: try year + month only
+  const ym = name.match(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})\b/);
+  if (ym) return [parseInt(ym[2], 10), PROJECT_MONTH_NUM[ym[1]] || 0, '', name.toLowerCase()];
+  return [9999, 99, 'zzz', name.toLowerCase()];
+}
+
+// Extract 2-4 letter BU code from project name (e.g. "TLM" from "applesheep May 2026 TLM — ...")
+function extractProjectBU(p) {
+  const m = (p.name || '').match(/\b([A-Z]{2,4})\b(?=\s*[—-])/);
+  return m ? m[1] : '';
+}
+
+function refreshProjectList() {
+  const inp = document.getElementById('project_link');
+  if (!inp) return;
+  const dl = document.getElementById('project_list');
+  const bcName = document.getElementById('brand_company').value;
+  const bc = state.brandCompanies.find(x => x.name === bcName);
+  const brand = bc ? (bc.brand || (bcName.split('-')[0] || '').trim()) : '';
+  const norm = s => (s || '').toLowerCase().trim();
+  let filtered = [];
+  if (brand) {
+    filtered = state.projects.filter(p => norm(p.brand) === norm(brand));
+  }
+  // Populate the BU filter dropdown with BUs actually present in this brand's projects
+  const buFilter = document.getElementById('project_bu_filter');
+  if (buFilter) {
+    const currentSel = buFilter.value;
+    const buSet = new Set();
+    filtered.forEach(p => {
+      const bu = extractProjectBU(p);
+      if (bu) buSet.add(bu);
+    });
+    const buList = Array.from(buSet).sort();
+    buFilter.innerHTML = '<option value="">— All BU —</option>' +
+      buList.map(b => `<option value="${b}">${b}</option>`).join('');
+    // Restore previous selection if still valid
+    if (buList.includes(currentSel)) buFilter.value = currentSel;
+  }
+  // Apply BU filter (if user picked one)
+  const buPick = buFilter ? buFilter.value : '';
+  if (buPick) {
+    filtered = filtered.filter(p => extractProjectBU(p) === buPick);
+  }
+  // Sort: Year ASC → Month ASC → BU → Name (so latest months grouped, BU bucketed)
+  filtered.sort((a, b) => {
+    const ka = projectSortKey(a), kb = projectSortKey(b);
+    for (let i = 0; i < ka.length; i++) {
+      if (ka[i] < kb[i]) return -1;
+      if (ka[i] > kb[i]) return 1;
+    }
+    return 0;
+  });
+  dl.innerHTML = filtered.map(p => `<option value="${escapeAttr(p.name)}">`).join('');
+  if (!brand) {
+    inp.placeholder = 'Pick a Brand Company first';
+  } else if (!filtered.length) {
+    inp.placeholder = buPick
+      ? `No projects in "${buPick}" for brand "${brand}"`
+      : `No projects found for brand "${brand}"`;
+  } else {
+    inp.placeholder = buPick
+      ? `${filtered.length} ${buPick} project(s) for "${brand}"`
+      : `${filtered.length} project(s) for brand "${brand}"`;
+  }
+  // Clear current selection if it no longer matches
+  if (inp.value && !filtered.some(p => p.name === inp.value)) {
+    inp.value = '';
+    document.getElementById('project_info').textContent = '';
+  }
+}
+
+function _approverAvatarHtml(e, big) {
+  const size = big ? 32 : 32;
+  if (e.avatar_url) {
+    return `<img class="cd-avatar" src="${escapeAttr(e.avatar_url)}" alt="" style="width:${size}px;height:${size}px;">`;
+  }
+  const initial = (e.en_name || e.lark_name || e.name || '?')[0].toUpperCase();
+  return `<div class="cd-avatar-placeholder" style="width:${size}px;height:${size}px;">${escapeHtml(initial)}</div>`;
+}
+
+function renderApproverDropdown(filter) {
+  const dd = document.getElementById('approver_dropdown');
+  if (!dd) return;
+  const q = (filter || '').trim().toLowerCase();
+  const list = state.employees.filter(e => {
+    if (!q) return true;
+    return (e.en_name || '').toLowerCase().includes(q)
+        || (e.lark_name || '').toLowerCase().includes(q)
+        || (e.name || '').toLowerCase().includes(q);
+  });
+  if (!list.length) {
+    dd.innerHTML = '<div class="cd-empty">ไม่พบ approver ที่ตรงกับคำค้น</div>';
+    return;
+  }
+  dd.innerHTML = list.map(e => {
+    // Primary label = the selectable value (en_name preferred for stable matching)
+    const primary = e.en_name || e.lark_name || e.name;
+    // Secondary = Thai full name (only show if different from primary)
+    const thaiName = e.name && e.name !== primary ? e.name : '';
+    // Tertiary = title + dept
+    const meta = [e.title, e.dept].filter(Boolean).join(' · ');
+    return `<div class="cd-item" data-name="${escapeAttr(primary)}" data-oid="${escapeAttr(e.open_id || '')}">
+      ${_approverAvatarHtml(e)}
+      <div style="min-width:0;">
+        <div class="cd-name">${escapeHtml(primary)}</div>
+        ${thaiName ? `<div class="cd-meta" style="color:var(--text); font-weight:500;">${escapeHtml(thaiName)}</div>` : ''}
+        ${meta ? `<div class="cd-meta">${escapeHtml(meta)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+  // Wire clicks
+  dd.querySelectorAll('.cd-item').forEach(it => {
+    it.addEventListener('mousedown', (ev) => {
+      ev.preventDefault();  // keep focus on input until we set value
+      const name = it.dataset.name;
+      const inp = document.getElementById('approver');
+      inp.value = name;
+      dd.classList.remove('open');
+      inp.dispatchEvent(new Event('input', {bubbles: true}));
+      inp.blur();
+    });
+  });
+}
+
+function populateApprovers() {
+  const inp = document.getElementById('approver');
+  const dd = document.getElementById('approver_dropdown');
+  const card = document.getElementById('approver_card');
+  if (!inp || !dd) return;
+  let prevApprover = '';
+  const openDropdown = () => {
+    prevApprover = inp.value || prevApprover;
+    renderApproverDropdown('');  // show all on focus
+    dd.classList.add('open');
+  };
+  // Only open on explicit user click — NOT on focus (avoids auto-open during page
+  // restore/programmatic focus). Use 'click' so it fires after mousedown+focusin completes.
+  inp.addEventListener('click', openDropdown);
+  inp.addEventListener('blur', () => {
+    // Delay close so click on item registers
+    setTimeout(() => {
+      dd.classList.remove('open');
+      if (!inp.value && prevApprover) inp.value = prevApprover;
+    }, 150);
+  });
+  inp.addEventListener('input', (ev) => {
+    if (ev && ev.isTrusted) {
+      renderApproverDropdown(inp.value);
+      dd.classList.add('open');
+    } else {
+      dd.classList.remove('open');
+    }
+    const e = findApprover(inp.value);
+    if (!e) {
+      if (inp.value.trim()) {
+        card.classList.add('show');
+        card.innerHTML = `<div class="ic-row" style="color:var(--warning);">⚠ "${escapeHtml(inp.value)}" ไม่ตรงกับชื่อ approver ที่มี</div>`;
+      } else {
+        card.classList.remove('show'); card.innerHTML = '';
+      }
+      return;
+    }
+    card.classList.add('show');
+    const avatar = e.avatar_url
+      ? `<img src="${escapeAttr(e.avatar_url)}" alt="" style="width:32px; height:32px; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:8px;">`
+      : `<span style="display:inline-block; width:32px; height:32px; border-radius:50%; background:var(--primary-gradient); color:white; text-align:center; line-height:32px; font-weight:700; font-size:13px; vertical-align:middle; margin-right:8px;">${escapeHtml((e.en_name || e.name || '?')[0].toUpperCase())}</span>`;
+    const larkLabel = e.en_name || e.lark_name || e.name;
+    card.innerHTML = `
+      <div class="ic-name" style="display:flex; align-items:center;">
+        ${avatar}
+        <span>${escapeHtml(larkLabel)} <span class="ic-badge" style="background:#dcfce7; color:#0fa15a;">✓ matched</span> ${e.title ? `<span class="ic-badge">${escapeHtml(e.title)}</span>` : ''}</span>
+      </div>
+      ${e.name && e.name !== larkLabel ? `<div class="ic-row"><b>ชื่อ-นามสกุล:</b> ${escapeHtml(e.name)}</div>` : ''}
+      ${e.dept ? `<div class="ic-row"><b>Department:</b> ${escapeHtml(e.dept)}</div>` : ''}
+      ${e.email ? `<div class="ic-row"><b>Email:</b> ${escapeHtml(e.email)}</div>` : ''}
+      ${e.tel ? `<div class="ic-row"><b>Tel:</b> ${escapeHtml(e.tel)}</div>` : ''}
+    `;
+  });
+}
+
+function findCreatedBy(name) {
+  if (!name) return null;
+  const q = name.trim().toLowerCase();
+  return state.allEmployees.find(e =>
+    (e.en_name||'').toLowerCase() === q ||
+    (e.lark_name||'').toLowerCase() === q ||
+    (e.name||'').toLowerCase() === q
+  ) || state.allEmployees.find(e =>
+    (e.en_name||'').toLowerCase().includes(q) ||
+    (e.lark_name||'').toLowerCase().includes(q) ||
+    (e.name||'').toLowerCase().includes(q)
+  ) || null;
+}
+
+function renderCreatedByCard(e) {
+  const card = document.getElementById('created_by_card');
+  if (!e) { card.classList.remove('show'); card.innerHTML=''; return; }
+  card.classList.add('show');
+  const label = e.en_name || e.lark_name || e.name;
+  const avatar = e.avatar_url
+    ? `<img src="${escapeAttr(e.avatar_url)}" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;">`
+    : `<span style="display:inline-block;width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#0fa15a,#2b5cf2);color:white;text-align:center;line-height:32px;font-weight:700;font-size:13px;vertical-align:middle;margin-right:8px;">${escapeHtml((label||'?')[0].toUpperCase())}</span>`;
+  card.innerHTML = `
+    <div class="ic-name" style="display:flex;align-items:center;">
+      ${avatar}<span>${escapeHtml(label)} <span class="ic-badge" style="background:#dcfce7;color:#0fa15a;">✓ Created by</span> ${e.title?`<span class="ic-badge">${escapeHtml(e.title)}</span>`:''}</span>
+    </div>
+    ${e.dept?`<div class="ic-row"><b>Department:</b> ${escapeHtml(e.dept)}</div>`:''}
+    ${e.email?`<div class="ic-row"><b>Email:</b> ${escapeHtml(e.email)}</div>`:''}
+  `;
+}
+
+function populateCreatedBy() {
+  // Created by is now locked to Lark login (set by setLoggedInUser)
+}
+
+function _OLD_populateCreatedBy_unused() {
+  const inp = document.getElementById('created_by');
+  // Restore last-used from localStorage
+  const last = localStorage.getItem('qtso_created_by_label');
+  if (last) {
+    inp.value = last;
+    const e = findCreatedBy(last);
+    renderCreatedByCard(e);
+  }
+  let prev = inp.value || '';
+  const clearForBrowse = () => {
+    prev = inp.value || prev;
+    if (inp.value) inp.value = '';
+  };
+  inp.addEventListener('mousedown', clearForBrowse);
+  inp.addEventListener('focus', clearForBrowse);
+  inp.addEventListener('blur', () => {
+    if (!inp.value && prev) inp.value = prev;
+    const e = findCreatedBy(inp.value);
+    if (e) {
+      localStorage.setItem('qtso_created_by_label', inp.value);
+      localStorage.setItem('qtso_created_by_open_id', e.open_id);
+    }
+    renderCreatedByCard(e);
+  });
+  inp.addEventListener('input', () => {
+    const e = findCreatedBy(inp.value);
+    renderCreatedByCard(e);
+  });
+}
+
+function buList() {
+  const set = new Set();
+  state.items.forEach(it => { if (it.bu) set.add(it.bu); });
+  return Array.from(set).sort();
+}
+
+function itemsForBU(bu) {
+  if (!bu) return [];
+  // Sort by leading number in "selection" (e.g. "1. ..." comes before "2. ...");
+  // items without a leading number fall to the end, sorted alphabetically.
+  const numOf = it => {
+    const m = (it.selection || it.item || '').match(/^\s*(\d+)\b/);
+    return m ? parseInt(m[1], 10) : Infinity;
+  };
+  return state.items
+    .filter(it => it.bu === bu)
+    .sort((a, b) => {
+      const na = numOf(a), nb = numOf(b);
+      if (na !== nb) return na - nb;
+      return (a.selection || a.item || '').localeCompare(b.selection || b.item || '');
+    });
+}
+
+const AM_OUT_REASONS = [
+  'BU is at full capacity',
+  'Work is not within BU scope',
+  'BU work is not up to brands standard',
+  'Other',
+];
+
+function addLine() {
+  state.lines.push({
+    item_selection: '', bu: '', custom_description: '', quantity: 1, unit_price: 0,
+    period_type: 'ตาม Request',
+    desc_mode: '', desc_input: '',
+  });
+  renderLines();
+}
+
+// Compute number of months between form Start and End (inclusive). 0 if not set.
+function monthsBetween() {
+  const sd = document.getElementById('start_date')?.value;
+  const ed = document.getElementById('end_date')?.value;
+  if (!sd || !ed) return 0;
+  const [sy, sm] = sd.split('-').map(Number);
+  const [ey, em] = ed.split('-').map(Number);
+  const n = (ey - sy) * 12 + (em - sm) + 1;
+  return n > 0 ? n : 0;
+}
+
+function toggleMemoSection(checked) {
+  document.getElementById('memo_extra').style.display = checked ? 'block' : 'none';
+  // Project Detail card is ALWAYS visible (regardless of the checkbox).
+  // It just stays in Phase 3 as a normal section.
+  if (!checked) {
+    // Clear Memo-specific values (Project Link) — but keep Project Detail since it's standalone now
+    document.getElementById('project_link').value = '';
+    document.getElementById('project_info').textContent = '';
+  }
+}
+
+function toggleDescInput(mode) {
+  const showInput = mode === 'ต้องการเขียน Description ด้วยตนเอง'
+                 || mode === 'ต้องการเขียน Description เพิ่มเติม';
+  document.getElementById('desc_input_wrap').style.display = showInput ? 'block' : 'none';
+  if (!showInput) document.getElementById('desc_input').value = '';
+}
+
+function toggleAMSection(checked) {
+  document.getElementById('am_extra').style.display = checked ? 'block' : 'none';
+  if (!checked) {
+    document.getElementById('am_reason').value = '';
+    document.getElementById('am_reason_detail').value = '';
+  }
+}
+
+function removeLine(i) {
+  state.lines.splice(i, 1);
+  renderLines();
+}
+
+function updateLine(i, key, val) {
+  // Guard: per-line Month/Year must not exceed the Period's End month/year
+  if (key === 'starting_month' || key === 'working_year') {
+    const proposed = {
+      starting_month: state.lines[i].starting_month,
+      working_year: state.lines[i].working_year,
+      [key]: val,
+    };
+    if (proposed.starting_month && proposed.working_year) {
+      const MONTH_NUM = {Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
+      const endRaw = document.getElementById('end_date')?.value || '';
+      if (endRaw) {
+        const [endY, endM] = endRaw.split('-').map(Number);
+        const pickedY = parseInt(proposed.working_year, 10);
+        const pickedM = MONTH_NUM[proposed.starting_month] || 0;
+        if (pickedY > endY || (pickedY === endY && pickedM > endM)) {
+          showErrToast('กรุณาเลือกใหม่');
+          state.lines[i][key] = '';
+          renderLines();
+          return;
+        }
+      }
+    }
+  }
+  state.lines[i][key] = val;
+  if (key === 'desc_input' || key === 'starting_month' || key === 'working_year') {
+    // Update only the Preview text in place — avoid full re-render to keep focus
+    updateDescPreview(i);
+    if (key !== 'desc_input') refreshPeriodHints();
+    return;
+  }
+  if (key === 'item_selection') {
+    const it = state.items.find(x => (x.selection || x.item) === val);
+    // Auto-fill Item Description with English Item Name (matches real QT/SO format).
+    // Fall back to Thai combined desc only if English unavailable.
+    state.lines[i].custom_description =
+      (it?.item || it?.combined_desc || it?.desc || '').trim();
+    // Auto-set desc_mode if Item Code restricts to a single option
+    const allowed = (it?.multiple_options || [])
+      .filter(m => m === 'ต้องการเขียน Description ด้วยตนเอง'
+                || m === 'ต้องการเขียน Description เพิ่มเติม'
+                || m === 'ไม่ต้องการเขียน Description เพิ่มเติม');
+    if (allowed.length === 1) {
+      state.lines[i].desc_mode = allowed[0];
+      // Don't pre-seed — user writes fresh in "ด้วยตนเอง" mode
+    } else if (state.lines[i].desc_mode && allowed.length && !allowed.includes(state.lines[i].desc_mode)) {
+      // Previously-chosen mode no longer valid for this item → reset
+      state.lines[i].desc_mode = '';
+      state.lines[i].desc_input = '';
+    }
+    renderLines();
+  } else {
+    recalc();
+  }
+}
+
+function setLineBU(i, bu) {
+  state.lines[i].bu = bu;
+  state.lines[i].item_selection = '';
+  renderLines();
+}
+
+
+function renderLines() {
+  const body = document.getElementById('items_body');
+  const buOpts = '<option value="">— BU —</option>' +
+    buList().map(b => `<option value="${escapeAttr(b)}">${escapeHtml(b)}</option>`).join('');
+  body.innerHTML = state.lines.map((ln, i) => {
+    const filtered = itemsForBU(ln.bu);
+    const itemOpts = ln.bu
+      ? '<option value="">— Pick item —</option>' +
+        // Show & save the "Item for selection" column from Item Code (read me) verbatim
+        filtered
+          .filter(it => it.selection)
+          .map(it => `<option value="${escapeAttr(it.selection)}"${it.selection===ln.item_selection?' selected':''}>${escapeHtml(it.selection)}</option>`)
+          .join('')
+      : '<option value="">— Pick BU first —</option>';
+    const buSel = buOpts.replace(`value="${escapeAttr(ln.bu)}"`, `value="${escapeAttr(ln.bu)}" selected`);
+    return `
+      <tr>
+        <td><select onchange="setLineBU(${i}, this.value)">${buSel}</select></td>
+        <td><select ${!ln.bu?'disabled':''} onchange="updateLine(${i}, 'item_selection', this.value)">${itemOpts}</select></td>
+        <td>${(() => {
+          const writeOwn = ln.desc_mode === 'ต้องการเขียน Description ด้วยตนเอง';
+          if (writeOwn) {
+            // User chose "write own" → Item Description is editable and stores desc_input
+            return `<input value="${escapeAttr(ln.desc_input || '')}"
+                          oninput="updateLine(${i}, 'desc_input', this.value)"
+                          placeholder="เขียน Description ของคุณเอง..."
+                          style="background:white;">`;
+          }
+          // Compute the FINAL Description that will appear on the QT/SO document.
+          // Same logic as server-side _render_draft (Lark Description formula mirror):
+          //   ไม่ต้องการเขียน → auto from Item Code + period
+          //   เพิ่มเติม      → auto + period + "\n" + user input
+          const item = state.items.find(x => (x.selection || x.item) === ln.item_selection);
+          // Use English Item Name to match the real QT/SO document format.
+          // Fall back to Thai combined desc only if English not available.
+          const autoRaw = item?.item || ln.custom_description || item?.combined_desc || item?.desc || '';
+          const auto = autoRaw.replace(/[\s,;.]+$/, '').trim();
+          const periodPart = (ln.starting_month && ln.working_year)
+            ? `${ln.starting_month} ${ln.working_year}` : '';
+          const autoWithPeriod = (auto + (periodPart ? ' ' + periodPart : '')).trim();
+          let displayDesc = autoWithPeriod;
+          if (ln.desc_mode === 'ต้องการเขียน Description เพิ่มเติม' && (ln.desc_input || '').trim()) {
+            displayDesc = autoWithPeriod + '\n' + (ln.desc_input || '').trim();
+          }
+          return `<textarea readonly tabindex="-1" rows="2"
+                          title="Auto-computed — matches QT/SO document"
+                          style="background:#f4f5f8; color:var(--muted); cursor:not-allowed; resize:none; min-height:38px;"
+                          placeholder="— pick item to auto-fill —">${escapeHtml(displayDesc)}</textarea>`;
+        })()}</td>
+        <td><input type="text" inputmode="numeric" class="num" min="1" value="${Math.max(1, Math.trunc(Number(ln.quantity)||1))}"
+                   onkeydown="blockNonInt(event)"
+                   oninput="this.value = this.value.replace(/^0+/, '').replace(/[^0-9]/g, ''); updateLine(${i}, 'quantity', parseInt(this.value)||1)"
+                   onblur="if (!this.value || Number(this.value) < 1) { this.value = '1'; updateLine(${i}, 'quantity', 1); }"></td>
+        <td><input type="text" inputmode="decimal" class="num" value="${(Number(ln.unit_price)||0).toFixed(2)}"
+                   onkeydown="blockDecimalKeys(event)"
+                   oninput="this.value = clipTo2dp(this.value); updateLine(${i}, 'unit_price', parseFloat(this.value) || 0)"
+                   onblur="this.value = ((Math.round((parseFloat(this.value)||0)*100)/100)).toFixed(2); updateLine(${i}, 'unit_price', parseFloat(this.value) || 0)"></td>
+        <td class="num" id="amount_${i}">${fmt((ln.quantity || 0) * (ln.unit_price || 0))}</td>
+        <td>${(function(){
+          const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+          const MONTH_NUM = {Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
+          const currYear = new Date().getFullYear();
+          const sd = document.getElementById('start_date')?.value || '';
+          const ed = document.getElementById('end_date')?.value || '';
+          // Restrict Year choices to current..endYear (or current+1 if no end set)
+          const endY = ed ? parseInt(ed.split('-')[0], 10) : (currYear + 1);
+          const endM = ed ? parseInt(ed.split('-')[1], 10) : 12;
+          const startY = sd ? parseInt(sd.split('-')[0], 10) : currYear;
+          const YEARS = [];
+          for (let y = Math.min(startY, currYear); y <= endY; y++) YEARS.push(String(y));
+          const defMonth = sd ? MONTH_NAMES[parseInt(sd.split('-')[1], 10) - 1] : '';
+          const defYear = sd ? sd.split('-')[0] : '';
+          const sm = ln.starting_month || defMonth || '';
+          const wy = ln.working_year || defYear || '';
+          // Filter Month options: if working_year === endY, only show months <= endM
+          const wyNum = parseInt(wy, 10) || 0;
+          const allowedMonths = MONTH_NAMES.filter(m =>
+            !ed || wyNum < endY || (wyNum === endY && MONTH_NUM[m] <= endM));
+          return `
+            <div style="display:flex; gap:6px; justify-content:flex-start;">
+              <select onchange="updateLine(${i}, 'starting_month', this.value)" style="padding:6px 4px 6px 8px; font-size:12.5px; width:64px;" title="Month">
+                <option value="">Month</option>
+                ${allowedMonths.map(m =>
+                  `<option value="${m}"${sm===m?' selected':''}>${m}</option>`).join('')}
+              </select>
+              <select onchange="updateLine(${i}, 'working_year', this.value)" style="padding:6px 4px 6px 8px; font-size:12.5px; width:70px;" title="Year">
+                <option value="">Year</option>
+                ${YEARS.map(y =>
+                  `<option value="${y}"${wy===y?' selected':''}>${y}</option>`).join('')}
+              </select>
+            </div>`;
+        })()}</td>
+        <td><button class="btn-danger" onclick="removeLine(${i})" title="Remove">×</button></td>
+      </tr>
+      ${(function(){
+        const ALL_MODES = [
+          'ต้องการเขียน Description ด้วยตนเอง',
+          'ต้องการเขียน Description เพิ่มเติม',
+          'ไม่ต้องการเขียน Description เพิ่มเติม',
+        ];
+        const item = state.items.find(x => (x.selection || x.item) === ln.item_selection);
+        let allowed = (item?.multiple_options || []).filter(m => ALL_MODES.includes(m));
+        if (!allowed.length) allowed = ALL_MODES;
+        const isLocked = allowed.length === 1;
+        const descMode = isLocked ? allowed[0] : ln.desc_mode;
+        const needsInput = descMode === 'ต้องการเขียน Description ด้วยตนเอง'
+                        || descMode === 'ต้องการเขียน Description เพิ่มเติม';
+        // Build the period suffix for the base description
+        const periodPart = (ln.starting_month && ln.working_year)
+          ? `${ln.starting_month} ${ln.working_year}` : '';
+        // Base description = same as Item Description column (Combined Description from Item Code)
+        // + month/year suffix when available — strip trailing punctuation from Lark formula
+        const itemDesc = (item?.item || ln.custom_description || item?.combined_desc || item?.desc || '')
+                         .replace(/[\s,;.]+$/, '').trim();
+        const baseDesc = (itemDesc + (periodPart ? ' ' + periodPart : '')).trim();
+        const userInput = (ln.desc_input || '').trim();
+        // Compute the Preview of Description shown to the customer:
+        //   ด้วยตนเอง   → user input only (replaces)
+        //   เพิ่มเติม   → base + newline + user input
+        //   ไม่ต้องการ → base only
+        //   (empty)    → base only (placeholder)
+        let preview = '';
+        if (descMode === 'ต้องการเขียน Description ด้วยตนเอง') {
+          preview = userInput;
+        } else if (descMode === 'ต้องการเขียน Description เพิ่มเติม') {
+          preview = baseDesc + (userInput ? '\n' + userInput : '');
+        } else {
+          preview = baseDesc;
+        }
+        return `
+        <tr class="line-desc-row" style="background:#fafbfd;">
+          <td colspan="8" style="padding: 6px 10px 14px;">
+            <div style="display:grid; grid-template-columns: minmax(280px, 1fr) 2fr; gap: 10px; align-items: start;">
+              <div>
+                <label style="font-size:10.5px; margin-bottom:3px; text-transform:none; letter-spacing:0; color:var(--muted);">
+                  ท่านต้องการเขียน Description เพิ่มเติมหรือไม่ <span style="color:var(--danger);">*</span>
+                  ${isLocked ? '<span style="color:var(--warning); font-size:10px;"> · auto-set by item</span>' : ''}
+                </label>
+                <select onchange="updateLineDescMode(${i}, this.value)" ${isLocked?'disabled':''}
+                        style="padding:5px 8px; font-size:12px; width:100%; ${isLocked?'background:#eef2f9; color:#1c2434;':''}">
+                  ${!isLocked ? `<option value=""${!ln.desc_mode?' selected':''}>— Select —</option>` : ''}
+                  ${allowed.map(m =>
+                    `<option value="${escapeAttr(m)}"${descMode===m?' selected':''}>${escapeHtml(m)}</option>`).join('')}
+                </select>
+              </div>
+              <div style="${descMode === 'ต้องการเขียน Description เพิ่มเติม' ? '' : 'display:none;'}">
+                <label style="font-size:10.5px; margin-bottom:3px; text-transform:none; letter-spacing:0; color:var(--muted);">
+                  Description Input <span style="color:var(--danger);">*</span>
+                  <span style="color:#9ca3af; font-size:10px;">· เพิ่มเติมต่อจาก Item Description</span>
+                </label>
+                <input value="${escapeAttr(ln.desc_input || '')}" oninput="updateLine(${i}, 'desc_input', this.value)"
+                       placeholder="ข้อความเพิ่มเติม (จะแสดงต่อจาก Item Description)"
+                       style="padding:5px 8px; font-size:12px; width:100%;">
+              </div>
+            </div>
+            <div style="margin-top:10px; ${needsInput ? '' : 'display:none;'}">
+              <label style="font-size:10.5px; margin-bottom:3px; text-transform:none; letter-spacing:0; color:var(--muted);">
+                Preview of Description for showing in QT
+              </label>
+              <div id="desc_preview_${i}" style="padding:8px 12px; background:#eef2f9; border:1px dashed #cbd0db; border-radius:6px; font-size:12.5px; color:var(--text); white-space:pre-wrap; min-height:22px;">${preview ? escapeHtml(preview) : '<span style="color:#9ca3af;">— pick item / mode first —</span>'}</div>
+            </div>
+            <!-- Per-line Project Detail -->
+            <div style="margin-top:10px;">
+              <label style="font-size:10.5px; margin-bottom:3px; text-transform:none; letter-spacing:0; color:var(--muted);">
+                Project Detail
+                <span style="color:#9ca3af; font-size:10px;">· รายละเอียดที่ทีมทำงานต้องรู้ <b style="color:var(--danger);">(ห้ามใส่ยอดเงิน)</b></span>
+              </label>
+              <input value="${escapeAttr(ln.project_detail || '')}"
+                     oninput="updateLine(${i}, 'project_detail', this.value)"
+                     placeholder="e.g. Hyrox / Tiktok Adidas performance / Tiktok / Shopee"
+                     style="padding:5px 8px; font-size:12px; width:100%;">
+            </div>
+          </td>
+        </tr>`;
+      })()}`;
+  }).join('');
+  refreshPeriodHints();
+  disableAutocomplete();
+  recalc();
+}
+
+function updateDescPreview(i) {
+  const ln = state.lines[i];
+  const el = document.getElementById(`desc_preview_${i}`);
+  if (!el) return;
+  const item = state.items.find(x => (x.selection || x.item) === ln.item_selection);
+  const periodPart = (ln.starting_month && ln.working_year)
+    ? `${ln.starting_month} ${ln.working_year}` : '';
+  // Base = Item Description (Combined Description from Item Code) — matches what shows in Item Description column
+  const itemDesc = (item?.item || ln.custom_description || item?.combined_desc || item?.desc || '')
+                   .replace(/[\s,;.]+$/, '').trim();
+  const baseDesc = (itemDesc + (periodPart ? ' ' + periodPart : '')).trim();
+  const userInput = (ln.desc_input || '').trim();
+  let preview = '';
+  if (ln.desc_mode === 'ต้องการเขียน Description ด้วยตนเอง') preview = userInput;
+  else if (ln.desc_mode === 'ต้องการเขียน Description เพิ่มเติม')
+    preview = baseDesc + (userInput ? '\n' + userInput : '');
+  else preview = baseDesc;
+  el.textContent = preview || '— pick item / mode first —';
+  el.style.color = preview ? 'var(--text)' : '#9ca3af';
+}
+
+function updateLineDescMode(i, mode) {
+  const ln = state.lines[i];
+  ln.desc_mode = mode;
+  // "ด้วยตนเอง" → user writes from scratch (REPLACES auto-fill, doesn't append).
+  // "เพิ่มเติม"  → user adds extra text to be appended after auto-fill.
+  // "ไม่ต้องการ" → no user text needed.
+  // Always start blank — user controls everything.
+  if (mode !== 'ต้องการเขียน Description ด้วยตนเอง'
+      && mode !== 'ต้องการเขียน Description เพิ่มเติม') {
+    ln.desc_input = '';
+  } else {
+    // Clear any prior text so the input is fresh
+    ln.desc_input = '';
+  }
+  renderLines();
+}
+
+function formatPeriodLabel(sd, ed, months) {
+  if (!sd || !ed || !months) return '— Pick Start & End —';
+  const fmt = (s) => {
+    const [y, m] = s.split('-').map(Number);
+    return new Date(y, m - 1, 1).toLocaleString('en-US', { month: 'short', year: 'numeric' });
+  };
+  const unit = months === 1 ? 'month' : 'months';
+  return `${fmt(sd)} → ${fmt(ed)}  (${months} ${unit})`;
+}
+
+function refreshPeriodHints() {
+  const months = monthsBetween();
+  const sd = document.getElementById('start_date')?.value || '';
+  const ed = document.getElementById('end_date')?.value || '';
+  // Update top-level Period display
+  const pd = document.getElementById('period_display');
+  if (pd) {
+    pd.textContent = formatPeriodLabel(sd, ed, months);
+    pd.style.color = months ? 'var(--text)' : 'var(--muted)';
+    pd.style.fontWeight = months ? '600' : '400';
+  }
+  state.lines.forEach((ln, i) => {
+    const el = document.getElementById(`period_hint_${i}`);
+    if (!el) return;
+    if (ln.period_type === 'ต้องการแยกเดือน') {
+      if (!months) {
+        el.textContent = '⚠ Set Start/End first';
+        el.style.color = 'var(--warning)';
+      } else {
+        el.textContent = `→ ${months} monthly line(s) on submit`;
+        el.style.color = 'var(--primary)';
+      }
+    } else {
+      el.textContent = sd && ed ? `${sd} → ${ed}` : '';
+      el.style.color = 'var(--muted)';
+    }
+  });
+}
+
+// Custom Month/Year picker — popup with ‹ year › nav + 4×3 month grid.
+// Exposed as window.MYPicker so inline onclick handlers can reach it.
+window.MYPicker = (function() {
+  const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const today = new Date();
+  const CURRENT_YEAR = today.getFullYear();
+  const CURRENT_MONTH = today.getMonth() + 1;
+  const MIN_YEAR = CURRENT_YEAR - 2;
+  const MAX_YEAR = CURRENT_YEAR + 2;
+  const view = { start: CURRENT_YEAR, end: CURRENT_YEAR };
+
+  function selectedYM(prefix) {
+    const v = document.getElementById(prefix + '_date').value;
+    if (!v) return null;
+    const [y, m] = v.split('-').map(Number);
+    return {y, m};
+  }
+  function setLabel(prefix) {
+    const lbl = document.getElementById(prefix + '_picker_label');
+    if (!lbl) return;
+    const sel = selectedYM(prefix);
+    if (!sel) {
+      lbl.textContent = '— Pick Month / Year —';
+      lbl.style.color = 'var(--muted)';
+    } else {
+      lbl.textContent = `${MONTH_LABELS[sel.m - 1]} ${sel.y}`;
+      lbl.style.color = 'var(--text)';
+    }
+  }
+  function render(prefix) {
+    const pop = document.getElementById(prefix + '_picker_pop');
+    if (!pop) return;
+    const sel = selectedYM(prefix);
+    const y = view[prefix];
+    const prevDisabled = y <= MIN_YEAR;
+    const nextDisabled = y >= MAX_YEAR;
+    pop.innerHTML = `
+      <div class="myp-head">
+        <button type="button" class="myp-arrow" ${prevDisabled?'disabled':''} onclick="MYPicker.stepYear('${prefix}', -1)">‹</button>
+        <span class="myp-yr">${y}</span>
+        <button type="button" class="myp-arrow" ${nextDisabled?'disabled':''} onclick="MYPicker.stepYear('${prefix}', 1)">›</button>
+      </div>
+      <div class="myp-grid">
+        ${MONTH_LABELS.map((m, i) => {
+          const monthNum = i + 1;
+          const isSel = sel && sel.y === y && sel.m === monthNum;
+          const isToday = y === CURRENT_YEAR && monthNum === CURRENT_MONTH;
+          const cls = 'myp-month' + (isSel ? ' sel' : (isToday ? ' today' : ''));
+          return `<button type="button" class="${cls}" onclick="MYPicker.pick('${prefix}', ${monthNum})">${m}</button>`;
+        }).join('')}
+      </div>
+    `;
+  }
+  function close(prefix) {
+    document.getElementById(prefix + '_picker_pop')?.classList.remove('open');
+  }
+  function open(prefix) {
+    close(prefix === 'start' ? 'end' : 'start');
+    const sel = selectedYM(prefix);
+    if (sel) view[prefix] = sel.y;
+    render(prefix);
+    document.getElementById(prefix + '_picker_pop')?.classList.add('open');
+  }
+  function validateRange(changedPrefix) {
+    const sd = document.getElementById('start_date').value;
+    const ed = document.getElementById('end_date').value;
+    if (sd && ed && sd > ed) {
+      showErrToast('กรุณาเลือกใหม่');
+      document.getElementById(changedPrefix + '_date').value = '';
+      document.getElementById(changedPrefix + '_month').value = '';
+      document.getElementById(changedPrefix + '_year').value = '';
+      setLabel(changedPrefix);
+      return false;
+    }
+    return true;
+  }
+
+  // Public API
+  return {
+    toggle(prefix) {
+      const pop = document.getElementById(prefix + '_picker_pop');
+      if (!pop) return;
+      if (pop.classList.contains('open')) close(prefix);
+      else open(prefix);
+      // Stop propagation so document click handler below doesn't immediately close
+      if (window.event) window.event.stopPropagation();
+    },
+    stepYear(prefix, delta) {
+      let y = view[prefix] + delta;
+      if (y < MIN_YEAR) y = MIN_YEAR;
+      if (y > MAX_YEAR) y = MAX_YEAR;
+      view[prefix] = y;
+      render(prefix);
+      if (window.event) window.event.stopPropagation();
+    },
+    pick(prefix, monthNum) {
+      const y = view[prefix];
+      const mm = String(monthNum).padStart(2, '0');
+      const ym = `${y}-${mm}`;
+      document.getElementById(prefix + '_date').value = ym;
+      document.getElementById(prefix + '_month').value = mm;
+      document.getElementById(prefix + '_year').value = String(y);
+      setLabel(prefix);
+      if (!validateRange(prefix)) {
+        if (window.event) window.event.stopPropagation();
+        return;
+      }
+      close(prefix);
+      document.getElementById(prefix + '_date').dispatchEvent(new Event('change', {bubbles: true}));
+      if (typeof refreshPeriodHints === 'function') refreshPeriodHints();
+      if (window.event) window.event.stopPropagation();
+    },
+    refresh(prefix) {
+      setLabel(prefix);
+      const sel = selectedYM(prefix);
+      if (sel) view[prefix] = sel.y;
+    },
+  };
+})();
+// Click outside → close any open picker
+document.addEventListener('click', (ev) => {
+  ['start', 'end'].forEach(p => {
+    const pop = document.getElementById(p + '_picker_pop');
+    const btn = document.getElementById(p + '_picker_btn');
+    if (!pop || !pop.classList.contains('open')) return;
+    if (pop.contains(ev.target) || btn.contains(ev.target)) return;
+    pop.classList.remove('open');
+  });
+});
+
+function recalc() {
+  const months = monthsBetween() || 1;
+  // Update each line's Amount cell live
+  state.lines.forEach((ln, i) => {
+    const cell = document.getElementById(`amount_${i}`);
+    if (cell) cell.textContent = fmt((Number(ln.quantity) || 0) * (Number(ln.unit_price) || 0));
+  });
+  // For totals: positive lines = Total amount, negative lines = Discount.
+  let gross = 0;
+  let discount = 0;
+  state.lines.forEach(ln => {
+    const mult = (ln.period_type === 'ต้องการแยกเดือน' && monthsBetween()) ? monthsBetween() : 1;
+    const amt = (Number(ln.quantity) || 0) * (Number(ln.unit_price) || 0) * mult;
+    if (amt >= 0) gross += amt;
+    else discount += amt;  // amt is negative
+  });
+  const net = gross + discount;  // discount is already negative
+  const vat = net * 0.07;
+  const grand = net + vat;
+  document.getElementById('t_sub').textContent = fmt(gross);
+  // Show Discount row only when there's actual discount
+  const dRow = document.getElementById('t_discount_row');
+  if (discount < 0) {
+    dRow.style.display = '';
+    document.getElementById('t_discount').textContent = fmt(discount);
+  } else {
+    dRow.style.display = 'none';
+  }
+  document.getElementById('t_net').textContent = fmt(net);
+  document.getElementById('t_vat').textContent = fmt(vat);
+  document.getElementById('t_grand').textContent = fmt(grand);
+}
+
+function fmt(n) {
+  return (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Attachments state — { file_token, filename, size } objects
+state.attachments = [];
+
+async function handleAttachUpload(fileList) {
+  const list = document.getElementById('att_list');
+  for (const f of fileList) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; align-items:center; gap:10px; padding:6px 0; font-size:13px;';
+    row.innerHTML = `<span style="flex:1; color:var(--muted);">⏳ Uploading ${escapeHtml(f.name)} (${(f.size/1024).toFixed(1)} KB)…</span>`;
+    list.appendChild(row);
+    const fd = new FormData(); fd.append('file', f, f.name);
+    try {
+      const r = await fetch('/api/upload-attachment', { method: 'POST', body: fd });
+      if (!r.ok) throw new Error('upload ' + r.status);
+      const res = await r.json();
+      state.attachments.push({ file_token: res.file_token, filename: res.filename, size: res.size });
+      const idx = state.attachments.length - 1;
+      row.innerHTML = `<span style="flex:1;">📎 ${escapeHtml(res.filename)} <span style="color:var(--muted);">(${(res.size/1024).toFixed(1)} KB)</span></span>
+        <button type="button" onclick="removeAttachment(${idx}, this.parentElement)" style="background:transparent; border:none; color:var(--danger); cursor:pointer; font-size:18px;">×</button>`;
+    } catch (e) {
+      row.innerHTML = `<span style="flex:1; color:var(--danger);">✗ Failed: ${escapeHtml(e.message)} — ${escapeHtml(f.name)}</span>`;
+    }
+  }
+  document.getElementById('att_input').value = '';
+}
+
+function removeAttachment(i, rowEl) {
+  state.attachments.splice(i, 1);
+  rowEl.remove();
+  // re-render to fix indices (simpler than tracking)
+  const list = document.getElementById('att_list');
+  list.innerHTML = '';
+  state.attachments.forEach((a, idx) => {
+    const r = document.createElement('div');
+    r.style.cssText = 'display:flex; align-items:center; gap:10px; padding:6px 0; font-size:13px;';
+    r.innerHTML = `<span style="flex:1;">📎 ${escapeHtml(a.filename)} <span style="color:var(--muted);">(${(a.size/1024).toFixed(1)} KB)</span></span>
+      <button type="button" onclick="removeAttachment(${idx}, this.parentElement)" style="background:transparent; border:none; color:var(--danger); cursor:pointer; font-size:18px;">×</button>`;
+    list.appendChild(r);
+  });
+}
+
+function blockNonInt(e) {
+  const allowed = ['Backspace','Delete','Tab','Enter','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'];
+  if (allowed.includes(e.key)) return;
+  if (e.ctrlKey || e.metaKey) return;
+  if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+}
+function blockDecimalKeys(e) {
+  const allowed = ['Backspace','Delete','Tab','Enter','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'];
+  if (allowed.includes(e.key)) return;
+  if (e.ctrlKey || e.metaKey) return;
+  if (e.key === '.') {
+    if (e.target.value.includes('.')) e.preventDefault();
+    return;
+  }
+  // Allow leading minus sign for negative numbers (must be first char)
+  if (e.key === '-') {
+    const pos = e.target.selectionStart;
+    if (pos !== 0 || e.target.value.includes('-')) e.preventDefault();
+    return;
+  }
+  if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+}
+function clipTo2dp(s) {
+  s = String(s);
+  // Preserve a leading minus sign, strip other non-digit/dot chars
+  const isNeg = s.trim().startsWith('-');
+  s = s.replace(/[^0-9.]/g, '');
+  const parts = s.split('.');
+  if (parts.length > 2) s = parts[0] + '.' + parts.slice(1).join('');
+  const m = s.match(/^(\d*)(?:\.(\d{0,2}))?/);
+  if (!m) return isNeg ? '-' : '';
+  const out = m[2] !== undefined ? m[1] + '.' + m[2] : m[1];
+  return (isNeg && out) ? '-' + out : (isNeg ? '-' : out);
+}
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+function goToRecheck() {
+  console.log('[recheck] button clicked');
+  let payload;
+  try {
+    payload = buildPayload();
+  } catch (e) {
+    console.error('[recheck] buildPayload threw:', e);
+    alert('Form error: ' + e.message);
+    return;
+  }
+  if (!payload) {
+    console.log('[recheck] buildPayload returned null (validation alert shown)');
+    return;
+  }
+  // Enrichment is best-effort; never let it block navigation
+  try {
+    const bc = state.brandCompanies.find(x => x.name === payload.brand_company) || {};
+    const cust = state.customers.find(x => x.name === payload.customer_pic) || {};
+    const appr = state.employees.find(x => x.open_id === payload.approver_open_id) || {};
+    payload._enriched = {
+      bc_company: bc.company || '', bc_address: bc.address || '', bc_tax_id: bc.tax_id || '',
+      cust_email: cust.email || '', cust_tel: cust.tel || '',
+      appr_name: appr.name || '', appr_title: appr.title || '',
+      appr_email: appr.email || '', appr_tel: appr.tel || '',
+    };
+    payload._monthsLabel = document.getElementById('period_display')?.textContent.trim() || '';
+    payload._am_on = !!document.getElementById('am_outsourced')?.checked;
+    payload._am_reason = document.getElementById('am_reason')?.value || '';
+    payload._am_reason_detail = document.getElementById('am_reason_detail')?.value || '';
+    payload._can_bill = document.getElementById('can_bill_now')?.value || '';
+    payload._desc_mode = document.getElementById('desc_mode')?.value || '';
+    payload._desc_input = document.getElementById('desc_input')?.value || '';
+    payload.lines.forEach(l => {
+      const it = state.items.find(x => (x.selection || x.item) === l.item_selection);
+      if (it) l._item_name = it.item;
+    });
+  } catch (e) {
+    console.warn('[recheck] enrichment skipped due to error:', e);
+  }
+  try {
+    sessionStorage.setItem('qtso_draft', JSON.stringify(payload));
+  } catch (e) {
+    console.error('[recheck] sessionStorage.setItem failed:', e);
+    alert('Could not save draft to sessionStorage: ' + e.message);
+    return;
+  }
+  // Visual feedback in case browser delays the nav
+  const btn = document.getElementById('submit_btn');
+  const stat = document.getElementById('submit_status');
+  if (btn) { btn.disabled = true; btn.textContent = 'Opening recheck…'; }
+  if (stat) { stat.textContent = '→ Loading recheck page…'; stat.style.color = 'var(--primary)'; }
+  console.log('[recheck] navigating to /recheck.html');
+  setTimeout(() => {
+    const url = '/recheck.html?v=' + Date.now();  // bust browser cache
+    try { window.location.assign(url); } catch (e) { window.location.href = url; }
+  }, 50);
+}
+
+function buildPayload(opts) {
+  const soft = !!(opts && opts.soft);
+  const phase = (opts && opts.phase) || 3;  // default = full Phase 3 validation
+  const approverName = document.getElementById('approver').value;
+  const approver = findApprover(approverName);
+  // Created by — from Lark login session (set once at bootstrap, persists 7 days).
+  // If session expired or never set, just submit without it — server uses whatever's available.
+  const createdByOpenId = document.getElementById('created_by_open_id').value;
+  const createdByName = document.getElementById('created_by').value;
+  const createdBy = createdByOpenId
+    ? { open_id: createdByOpenId, name: createdByName, en_name: createdByName }
+    : null;
+  // Created by is now driven by Lark session — no localStorage needed
+  const remark = document.getElementById('remark').value.trim();
+
+  const payload = {
+    doc_type: document.getElementById('doc_type').value,
+    company: document.getElementById('company').value,
+    brand_company: document.getElementById('brand_company').value,
+    customer_pic: document.getElementById('customer_pic').value,
+    type_of_work: document.getElementById('type_of_work').value,
+    currency: document.getElementById('currency').value,
+    exchange_rate: parseFloat(document.getElementById('exchange_rate').value) || 1,
+    credit_term: document.getElementById('credit_term').value,
+    approver_open_id: approver ? approver.open_id : '',
+    created_by_open_id: createdBy ? createdBy.open_id : '',
+    created_by_name: createdBy ? (createdBy.en_name || createdBy.lark_name || createdBy.name) : '',
+    remark: remark,
+    attachment_tokens: (state.attachments || []).map(a => a.file_token),
+    // Memo & Project (applied to every line on submit)
+    memo_done: document.getElementById('memo_done')?.checked || false,
+    project_link_id: (function(){
+      const pName = document.getElementById('project_link')?.value || '';
+      const p = state.projects.find(x => x.name === pName);
+      return p ? p.record_id : '';
+    })(),
+    // project_detail is now per-line (inside state.lines), no global field
+    lines: [],
+  };
+  // Expand each form line: "ต้องการแยกเดือน" → one row per month between Start–End
+  const baseLines = state.lines.filter(l => l.item_selection || l.unit_price > 0);
+  const sd = document.getElementById('start_date').value;
+  const ed = document.getElementById('end_date').value;
+  const months = monthsBetween();
+  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  // Derive default starting_month / working_year from form's Start date
+  const defaultMonth = sd ? MONTH_NAMES[parseInt(sd.split('-')[1], 10) - 1] : '';
+  const defaultYear  = sd ? sd.split('-')[0] : '';
+
+  // Each line = 1 record (user picks Month + Year directly per line — no auto-expand)
+  for (const l of baseLines) {
+    payload.lines.push({
+      ...l,
+      period_type: l.period_type || 'ตาม Request',
+      starting_month: l.starting_month || defaultMonth,
+      working_year: l.working_year || defaultYear,
+    });
+  }
+
+  // Apply doc-level Billing Timing (per-line in Lark) to every line
+  const canBill = document.getElementById('can_bill_now').value;
+  if (canBill) payload.lines.forEach(l => { l.can_bill_now = canBill; });
+
+  // Apply Memo / Project Link to every line (Project Detail is per-line, already in state.lines)
+  payload.lines.forEach(l => {
+    l.memo_done = payload.memo_done;
+    if (payload.project_link_id) l.project_link_id = payload.project_link_id;
+  });
+
+  // Per-line desc_mode + desc_input — already in state.lines (no doc-level override)
+
+  // Apply AM Outsource (per-line in Lark, but a single doc-level setting here) to every line
+  const amOn = document.getElementById('am_outsourced').checked;
+  if (amOn) {
+    const reason = document.getElementById('am_reason').value;
+    const detail = document.getElementById('am_reason_detail').value;
+    payload.lines.forEach(l => {
+      l.am_outsourced = true;
+      if (reason) l.am_reason = reason;
+      if (detail) l.am_reason_detail = detail;
+    });
+  }
+  // type="month" returns "YYYY-MM" — convert to 1st day of month / last day of month
+  if (sd) payload.start_date = new Date(sd + '-01T00:00:00').getTime();
+  if (ed) {
+    const [y, m] = ed.split('-').map(Number);
+    payload.end_date = new Date(y, m, 0, 23, 59, 59).getTime();
+  }
+
+  // Helper: focus + show red toast + return null (form invalid)
+  const fail = (msg, focusId) => {
+    showErrToast(msg);
+    if (focusId) {
+      const el = document.getElementById(focusId);
+      if (el && typeof el.focus === 'function') {
+        try { el.focus(); } catch (e) {}
+        el.scrollIntoView && el.scrollIntoView({behavior: 'smooth', block: 'center'});
+      }
+    }
+    return null;
+  };
+
+  // ── Phase 2 required fields (all * fields in Phase 2) ──
+  if (phase === 2 && !soft) {
+    if (!payload.doc_type) return fail('กรุณาเลือก Document Type', 'doc_type');
+    if (!payload.type_of_work) return fail('กรุณาเลือก Type of Work', 'type_of_work');
+    if (!payload.brand_company) return fail('กรุณาเลือก Brand Company', 'brand_company');
+    if (!payload.currency) return fail('กรุณาเลือก Currency', 'currency');
+    if (!payload.start_date) return fail('กรุณาเลือก Start (Month / Year)', 'start_picker_btn');
+    if (!payload.end_date) return fail('กรุณาเลือก End (Month / Year)', 'end_picker_btn');
+    if (!payload.approver_open_id) {
+      return fail('กรุณาเลือก Approver จาก dropdown', 'approver');
+    }
+  }
+
+  // ── Phase 3 required fields (line items + billing + descriptions) ──
+  if (phase >= 3 && !soft) {
+    if (!document.getElementById('can_bill_now').value) {
+      return fail('กรุณาเลือก "เก็บเงินได้เลยไหม"', 'can_bill_now');
+    }
+    if (!payload.lines.length) {
+      return fail('กรุณาเพิ่มอย่างน้อย 1 รายการ Line Item');
+    }
+    // Per-line validation: each line needs BU + Item + Qty > 0 + Unit Price > 0 + Month + Year + desc_mode
+    for (let i = 0; i < payload.lines.length; i++) {
+      const l = payload.lines[i];
+      const n = i + 1;
+      if (!l.bu) return fail(`บรรทัดที่ ${n}: กรุณาเลือก BU`);
+      if (!l.item_selection) return fail(`บรรทัดที่ ${n}: กรุณาเลือก Item`);
+      if (!l.quantity || Number(l.quantity) <= 0) return fail(`บรรทัดที่ ${n}: กรุณากรอก Quantity > 0`);
+      if (Number(l.unit_price) === 0 || isNaN(Number(l.unit_price))) return fail(`บรรทัดที่ ${n}: กรุณากรอก Unit Price (ไม่ใช่ 0)`);
+      if (!l.starting_month) return fail(`บรรทัดที่ ${n}: กรุณาเลือก Month`);
+      if (!l.working_year) return fail(`บรรทัดที่ ${n}: กรุณาเลือก Year`);
+      if (!l.desc_mode) return fail(`บรรทัดที่ ${n}: กรุณาเลือก "ท่านต้องการเขียน Description..."`);
+      const needsInput = l.desc_mode === 'ต้องการเขียน Description ด้วยตนเอง'
+                      || l.desc_mode === 'ต้องการเขียน Description เพิ่มเติม';
+      if (needsInput && !(l.desc_input || '').trim()) {
+        return fail(`บรรทัดที่ ${n}: กรุณากรอก Description Input`);
+      }
+    }
+  }
+  return payload;
+}
+
+// Legacy direct-submit function (kept for compatibility; not used in current flow)
+async function _legacySubmit(payload) {
+  const stat = document.getElementById('submit_status');
+  const btn = document.getElementById('submit_btn');
+  btn.disabled = true; stat.textContent = 'Creating in Lark Base…'; stat.style.color = 'var(--muted)';
+  try {
+    const res = await fetchJSON('/api/create-qt', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      const pid = encodeURIComponent(res.parent_record_id);
+      stat.innerHTML = `✓ Created: <b>${escapeHtml(res.request_no || res.parent_record_id)}</b>`;
+      stat.style.color = 'var(--success)';
+    } else { stat.textContent = '✗ Errors — see console'; console.error(res); }
+  } catch (e) {
+    stat.textContent = '✗ Failed: ' + e.message;
+    stat.style.color = 'var(--danger)';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// === DONE page (Phase 3 success) ===
+function showDonePage(res) {
+  document.getElementById('done_qtno').textContent = PhaseState.requestNo || '';
+  // Hide form chrome
+  document.querySelector('header').style.display = 'none';
+  document.querySelector('.container').style.display = 'none';
+  document.getElementById('prev_toggle').style.display = 'none';
+  document.getElementById('prev_pane').classList.remove('open');
+  document.body.classList.remove('preview-open');
+  document.getElementById('done_page').style.display = 'block';
+  window.scrollTo(0, 0);
+}
+
+function hideDonePage() {
+  document.getElementById('done_page').style.display = 'none';
+  document.querySelector('header').style.display = '';
+  document.querySelector('.container').style.display = '';
+}
+
+// === Custom confirm dialog helper ===
+function showConfirm({title, message, okText, cancelText, icon}) {
+  return new Promise((resolve) => {
+    const bd = document.getElementById('confirm_backdrop');
+    document.getElementById('cf_title').textContent = title || 'ยืนยัน';
+    document.getElementById('cf_msg').textContent = message || '';
+    document.getElementById('cf_icon').textContent = icon || '⚠';
+    document.getElementById('cf_ok').textContent = okText || 'ยืนยัน';
+    document.getElementById('cf_cancel').textContent = cancelText || 'Cancel';
+    bd.classList.add('show');
+    const onOk = () => { cleanup(); resolve(true); };
+    const onCancel = () => { cleanup(); resolve(false); };
+    const onBackdrop = (e) => { if (e.target === bd) onCancel(); };
+    const onKey = (e) => { if (e.key === 'Escape') onCancel(); else if (e.key === 'Enter') onOk(); };
+    function cleanup() {
+      bd.classList.remove('show');
+      document.getElementById('cf_ok').removeEventListener('click', onOk);
+      document.getElementById('cf_cancel').removeEventListener('click', onCancel);
+      bd.removeEventListener('click', onBackdrop);
+      document.removeEventListener('keydown', onKey);
+    }
+    document.getElementById('cf_ok').addEventListener('click', onOk);
+    document.getElementById('cf_cancel').addEventListener('click', onCancel);
+    bd.addEventListener('click', onBackdrop);
+    document.addEventListener('keydown', onKey);
+  });
+}
+
+// === Red error toast helper ===
+let _errToastTimer = null;
+function showErrToast(msg) {
+  const el = document.getElementById('err_toast');
+  const m = document.getElementById('err_toast_msg');
+  if (!el || !m) return;
+  m.textContent = msg || 'กรุณาเลือกใหม่';
+  el.classList.add('show');
+  if (_errToastTimer) clearTimeout(_errToastTimer);
+  _errToastTimer = setTimeout(hideErrToast, 2400);
+}
+function hideErrToast() {
+  document.getElementById('err_toast')?.classList.remove('show');
+}
+
+// === QT Viewer (view-only modal) ===
+async function openQtViewer() {
+  const id = PhaseState.recordId;
+  if (!id) { alert('No QT record id'); return; }
+  const overlay = document.getElementById('qt_viewer');
+  const body = document.getElementById('qt_viewer_body');
+  document.getElementById('qt_viewer_no').textContent = PhaseState.requestNo || '';
+  overlay.style.display = 'flex';
+  body.innerHTML = '<div style="text-align:center; padding:30px; color:#6b7280;">⏳ กำลังโหลด…</div>';
+  try {
+    // Render using the LIVE form data (state.lines has desc_mode info that Lark Base
+    // doesn't persist — automation overwrites the desc_mode field). This keeps the
+    // viewer consistent with what user saw in the live side-pane preview.
+    let html;
+    const payload = buildPayload({soft: true});
+    if (payload && state.lines && state.lines.length) {
+      const r = await fetch('/api/draft-render', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          ...payload,
+          mode: 'preview',
+          qt_id: PhaseState.requestNo || '',
+          request_no: PhaseState.requestNo || '',
+        }),
+      });
+      html = await r.text();
+    } else {
+      // Fallback: load saved data from Lark (loses desc_mode info)
+      const r = await fetch(`/preview/${encodeURIComponent(id)}?mode=preview`);
+      html = await r.text();
+    }
+    body.innerHTML = '';
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'width:100%; min-height:1080px; border:none; background:white; box-shadow:0 8px 32px rgba(43,92,242,0.12), 0 2px 6px rgba(20,30,60,0.06); border-radius:var(--radius); pointer-events:auto;';
+    iframe.setAttribute('sandbox', 'allow-same-origin');  // blocks scripts/forms/popups but lets us read
+    iframe.srcdoc = html;
+    body.appendChild(iframe);
+    // Soft-discourage download: block right-click + Cmd/Ctrl+S inside iframe
+    iframe.addEventListener('load', () => {
+      try {
+        const doc = iframe.contentDocument;
+        if (doc) {
+          doc.addEventListener('contextmenu', e => { e.preventDefault(); return false; });
+          doc.addEventListener('keydown', e => {
+            if ((e.ctrlKey || e.metaKey) && ['s','p','c'].includes(e.key.toLowerCase())) {
+              e.preventDefault(); return false;
+            }
+          });
+        }
+      } catch (e) { /* cross-origin guard */ }
+    });
+  } catch (e) {
+    body.innerHTML = `<div style="text-align:center; padding:30px; color:#dc2626;">Failed to load: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function closeQtViewer() {
+  document.getElementById('qt_viewer').style.display = 'none';
+  document.getElementById('qt_viewer_body').innerHTML = '';
+}
+
+// Esc to close
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('qt_viewer').style.display === 'flex') {
+    closeQtViewer();
+  }
+});
+
+// =============================================================
+// 3-PHASE STATE MACHINE
+// =============================================================
+const PhaseState = {
+  current: 1,           // 1, 2, 3
+  contractType: null,   // 'contract' | 'non-contract'
+  recordId: null,
+  requestNo: null,
+};
+
+function showPhase(n) {
+  PhaseState.current = n;
+  // Hide QT Preview toggle during Phase 1 (nothing to preview yet)
+  const pt = document.getElementById('prev_toggle');
+  if (pt) pt.style.display = (n === 1) ? 'none' : '';
+  // Also close the pane if open when going back to Phase 1
+  if (n === 1) {
+    const pane = document.getElementById('prev_pane');
+    if (pane) pane.classList.remove('open');
+    document.body.classList.remove('preview-open');
+  }
+  // Stepper visuals
+  document.querySelectorAll('.step').forEach(s => {
+    const num = parseInt(s.dataset.step, 10);
+    s.classList.remove('active','done');
+    if (num < n) s.classList.add('done');
+    else if (num === n) s.classList.add('active');
+  });
+  // Phase 1 wrapper
+  document.getElementById('phase1_wrap').style.display = (n === 1) ? '' : 'none';
+  // Phase 2/3 sections
+  document.querySelectorAll('.phase-section').forEach(el => {
+    const p = parseInt(el.dataset.phase, 10);
+    el.style.display = (p <= n) ? '' : 'none';
+  });
+  // QT banner now lives inside #phase2_edit_wrap — visibility controlled by lockPhase2/unlockPhase2
+}
+
+function persistState() {
+  try {
+    localStorage.setItem('qtso_phase_state', JSON.stringify({
+      recordId: PhaseState.recordId,
+      requestNo: PhaseState.requestNo,
+      contractType: PhaseState.contractType,
+      phase: PhaseState.current,
+    }));
+  } catch (e) {}
+}
+
+// ── Auto-save draft (form values + line items) so user doesn't lose data on accidental close ──
+const DRAFT_KEY = 'qtso_form_draft';
+let _draftSaveTimer = null;
+
+function captureDraft() {
+  const grab = (id) => document.getElementById(id)?.value ?? '';
+  const check = (id) => !!document.getElementById(id)?.checked;
+  return {
+    savedAt: new Date().toISOString(),
+    phase: PhaseState.current,
+    // Phase 2 fields
+    doc_type: grab('doc_type'),
+    company: grab('company'),
+    type_of_work: grab('type_of_work'),
+    brand_company: grab('brand_company'),
+    customer_pic: grab('customer_pic'),
+    approver: grab('approver'),
+    currency: grab('currency'),
+    credit_term: grab('credit_term'),
+    exchange_rate: grab('exchange_rate'),
+    start_date: grab('start_date'),
+    end_date: grab('end_date'),
+    // Phase 3 fields
+    am_outsourced: check('am_outsourced'),
+    am_reason: grab('am_reason'),
+    am_reason_detail: grab('am_reason_detail'),
+    can_bill_now: grab('can_bill_now'),
+    memo_done: check('memo_done'),
+    project_link: grab('project_link'),
+    project_bu_filter: grab('project_bu_filter'),
+    remark: grab('remark'),
+    // Line items (deep copy of state.lines)
+    lines: JSON.parse(JSON.stringify(state.lines || [])),
+  };
+}
+
+function saveDraft() {
+  // Skip auto-save if a QT was already created — its data lives in Lark Base, not localStorage
+  if (PhaseState.recordId) return;
+  if (_draftSaveTimer) clearTimeout(_draftSaveTimer);
+  _draftSaveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(captureDraft()));
+    } catch (e) {}
+  }, 400);
+}
+
+function clearDraft() {
+  try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+}
+
+function restoreDraft() {
+  let d;
+  try { d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); } catch (e) { return false; }
+  if (!d) return false;
+  // Only restore if no QT was created (otherwise the resumed flow handles it)
+  if (PhaseState.recordId) return false;
+  const set = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.value = val; };
+  const setChk = (id, val) => { const el = document.getElementById(id); if (el) el.checked = !!val; };
+  set('doc_type', d.doc_type); set('company', d.company); set('type_of_work', d.type_of_work);
+  set('brand_company', d.brand_company); set('customer_pic', d.customer_pic);
+  set('approver', d.approver); set('currency', d.currency); set('credit_term', d.credit_term);
+  set('exchange_rate', d.exchange_rate);
+  // NOTE: start_date / end_date are intentionally NOT restored from draft —
+  // user wants to pick the Period explicitly every time (no auto-fill).
+  if (window.MYPicker) { MYPicker.refresh('start'); MYPicker.refresh('end'); }
+  setChk('am_outsourced', d.am_outsourced);
+  set('am_reason', d.am_reason); set('am_reason_detail', d.am_reason_detail);
+  if (d.am_outsourced && typeof toggleAMSection === 'function') toggleAMSection(true);
+  set('can_bill_now', d.can_bill_now);
+  setChk('memo_done', d.memo_done);
+  set('project_link', d.project_link);
+  if (d.memo_done && typeof toggleMemoSection === 'function') toggleMemoSection(true);
+  set('remark', d.remark);
+  // Line items — only restore lines with actual content; drop empty placeholders
+  if (Array.isArray(d.lines) && d.lines.length) {
+    const nonEmpty = d.lines.filter(l =>
+      l && (l.item_selection || l.bu || (l.unit_price && Number(l.unit_price) !== 0)
+            || (l.quantity && Number(l.quantity) > 1) || (l.desc_input || '').trim()
+            || (l.project_detail || '').trim()));
+    if (nonEmpty.length) {
+      state.lines = nonEmpty;
+      if (typeof renderLines === 'function') renderLines();
+    }
+  }
+  // Trigger side-effects (info cards, credit term options, etc.)
+  ['brand_company', 'customer_pic', 'approver', 'currency', 'start_date', 'end_date',
+   'project_link', 'project_bu_filter'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.dispatchEvent(new Event('input', {bubbles: true}));
+  });
+  if (typeof refreshPeriodHints === 'function') refreshPeriodHints();
+  // Restore phase
+  if (d.phase === 2) {
+    PhaseState.contractType = 'non-contract';
+    showPhase(2);
+  }
+  return true;
+}
+
+// Wire auto-save to every input/change on the form
+document.addEventListener('input', saveDraft);
+document.addEventListener('change', saveDraft);
+
+function loadPersistedState() {
+  try {
+    const s = JSON.parse(localStorage.getItem('qtso_phase_state') || '{}');
+    if (s.recordId && s.requestNo) {
+      PhaseState.recordId = s.recordId;
+      PhaseState.requestNo = s.requestNo;
+      PhaseState.contractType = s.contractType || 'non-contract';
+      document.getElementById('banner_qtno').textContent = s.requestNo;
+      showPhase(3);
+      setTimeout(lockPhase2, 0);
+      // NOTE: actual Phase 2 data is pulled from Lark AFTER bootstrap finishes
+      // (see bootstrap success block — needs state.brandCompanies / customers loaded first)
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+// Pulls QT data from Lark and pre-fills Phase 2 inputs. Safe to call any time after bootstrap.
+async function resumeQtFromLark(recordId) {
+  if (!recordId) return;
+  try {
+    const r = await fetch(`/api/qt/${encodeURIComponent(recordId)}`);
+    const data = await r.json();
+    if (data && data.parent) {
+      populatePhase2FromLark(data);
+      // Refresh preview if open
+      if (document.getElementById('prev_pane')?.classList.contains('open')) {
+        document.getElementById('prev_refresh')?.click();
+      }
+    }
+  } catch (e) {
+    console.warn('[resume] failed to load QT data:', e);
+  }
+}
+
+function startNewQT() {
+  PhaseState.recordId = null;
+  PhaseState.requestNo = null;
+  PhaseState.contractType = null;
+  localStorage.removeItem('qtso_phase_state');
+  clearDraft();  // Fresh form — drop any prior draft
+  // Banner is inside phase2_edit_wrap which unlockPhase2() hides
+  unlockPhase2();
+  // Reset Confirm button label (in case it was "Re-Confirm" from a previous edit)
+  const btn = document.getElementById('btn_confirm_phase2');
+  if (btn) btn.textContent = '✓ Confirm Booking & สร้าง QT/SO';
+  // Clear submit-status footer
+  const ss = document.getElementById('submit_status');
+  if (ss) ss.innerHTML = '';
+  // Leave Done page if we're there
+  hideDonePage();
+  showPhase(1);
+}
+
+// --- Phase 1 → Phase 2 ---
+function resetFormForNewQT() {
+  // Phase 2 inputs
+  const reset = (id, val='') => { const el = document.getElementById(id); if (el) el.value = val; };
+  reset('brand_company'); reset('customer_pic'); reset('approver');
+  reset('start_date'); reset('end_date');
+  reset('start_month'); reset('start_year');
+  reset('end_month'); reset('end_year');
+  reset('start_date_select'); reset('end_date_select');
+  // Refresh MYPicker labels — without this, button still shows old "Jun 2026" text
+  if (window.MYPicker) { MYPicker.refresh('start'); MYPicker.refresh('end'); }
+  reset('credit_term');
+  reset('exchange_rate', '1');
+  reset('remark');
+  reset('project_link');
+  // Selects → first option
+  const sel = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+  sel('doc_type', 'Quotation');
+  sel('company', 'RPL : RIPPLES COMMERCE');
+  sel('type_of_work', 'AWO');
+  sel('currency', 'THB');
+  sel('can_bill_now', '');
+  sel('am_reason', '');
+  reset('am_reason_detail');
+  // Checkboxes
+  const am = document.getElementById('am_outsourced');
+  if (am) { am.checked = false; if (typeof toggleAMSection === 'function') toggleAMSection(false); }
+  const mm = document.getElementById('memo_done');
+  if (mm) { mm.checked = false; if (typeof toggleMemoSection === 'function') toggleMemoSection(false); }
+  // Hidden created_by
+  reset('created_by'); reset('created_by_open_id');
+  // Info cards
+  document.querySelectorAll('.info-card').forEach(c => { c.classList.remove('show'); c.innerHTML = ''; });
+  // Period display
+  const pd = document.getElementById('period_display');
+  if (pd) pd.textContent = '— Pick Start & End —';
+  // Attachments
+  if (state.attachments) state.attachments.length = 0;
+  const al = document.getElementById('att_list');
+  if (al) al.innerHTML = '';
+  // Line items → one empty line
+  state.lines = [];
+  if (typeof addLine === 'function') addLine();
+  // Update exchange-rate visibility (THB hides it)
+  if (typeof updateExchangeRate === 'function') updateExchangeRate();
+  // Submit status footer
+  const ss = document.getElementById('submit_status');
+  if (ss) ss.innerHTML = '';
+}
+
+document.getElementById('pick_noncontract').addEventListener('click', () => {
+  PhaseState.contractType = 'non-contract';
+  // Always start fresh — clear any leftover form values from previous QT
+  resetFormForNewQT();
+  // Ensure Phase 2 is editable when entering from Phase 1
+  unlockPhase2();
+  const btn = document.getElementById('btn_confirm_phase2');
+  if (btn) btn.textContent = '✓ Confirm Booking & สร้าง QT/SO';
+  showPhase(2);
+});
+document.getElementById('pick_contract').addEventListener('click', () => {
+  alert('Contract path ยังไม่เปิดใช้งานครับ — Coming soon');
+});
+
+// --- Resume by QT ID ---
+document.getElementById('btn_resume').addEventListener('click', async () => {
+  const id = document.getElementById('resume_no').value.trim();
+  if (!id) { showErrToast('กรอกเลข QT ID'); return; }
+  const btn = event.currentTarget;
+  btn.disabled = true; btn.textContent = 'Loading…';
+  try {
+    const r = await fetch('/api/qt-lookup', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({qt_id: id}),
+    });
+    const res = await r.json();
+    if (!res.ok) { showErrToast('ไม่พบ QT ID: ' + id); return; }
+    PhaseState.recordId = res.record_id;
+    PhaseState.requestNo = res.qt_id || res.request_no;
+    PhaseState.contractType = 'non-contract';
+    document.getElementById('banner_qtno').textContent = res.qt_id || res.request_no;
+    persistState();
+    showPhase(3);
+    setTimeout(lockPhase2, 0);
+    // Pre-fill Phase 2 form (locked) with the loaded data
+    if (res.data) populatePhase2FromLark(res.data);
+  } catch (e) {
+    showErrToast('Error: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Load';
+  }
+});
+
+// --- Restart ---
+document.getElementById('btn_restart').addEventListener('click', async () => {
+  const ok = await showConfirm({
+    title: 'ยกเลิก QT/SO นี้?',
+    message: 'การกด Cancel จะกลับไปหน้าแรกและล้างข้อมูลที่กรอกค้างไว้',
+    okText: 'Cancel',
+    cancelText: 'ย้อนกลับ',
+    icon: '✕',
+  });
+  if (ok) startNewQT();
+});
+
+// --- Phase 2 Confirm: create QT in Lark Base ---
+function lockPhase2() {
+  document.querySelectorAll('.phase-section[data-phase="2"]').forEach(el => {
+    // Don't lock the Confirm button container — we hide it instead
+    if (el.classList.contains('phase2-confirm')) {
+      el.style.display = 'none';
+    } else {
+      el.classList.add('phase-locked');
+    }
+  });
+  // Close any open custom dropdowns (Brand Company / Approver) — they shouldn't
+  // hang around when Phase 2 is locked.
+  document.querySelectorAll('.custom-dropdown.open').forEach(dd => dd.classList.remove('open'));
+  // Show the Edit button directly below the locked sections
+  const ew = document.getElementById('phase2_edit_wrap');
+  if (ew) ew.style.display = '';
+  // Hide the Back button — QT already created, no going back
+  const bw = document.getElementById('phase2_back_wrap');
+  if (bw) bw.style.display = 'none';
+}
+
+function unlockPhase2() {
+  document.querySelectorAll('.phase-section[data-phase="2"]').forEach(el => {
+    el.classList.remove('phase-locked');
+    if (el.classList.contains('phase2-confirm')) {
+      el.style.display = '';
+      // Change confirm button label to indicate it's a re-stamp
+      const btn = document.getElementById('btn_confirm_phase2');
+      if (btn) btn.textContent = '✓ Re-Confirm (Stamp ทับของเดิม)';
+    }
+  });
+  // Hide the Edit button while user is editing
+  const ew = document.getElementById('phase2_edit_wrap');
+  if (ew) ew.style.display = 'none';
+}
+
+document.getElementById('btn_confirm_phase2').addEventListener('click', async () => {
+  let payload;
+  try {
+    payload = buildPayload({phase: 2});
+  } catch (e) {
+    console.error('[Confirm Phase 2] buildPayload error:', e);
+    showErrToast('Error: ' + e.message);
+    return;
+  }
+  if (!payload) return;  // buildPayload showed its own validation message (red toast + focus)
+  const btn = document.getElementById('btn_confirm_phase2');
+  btn.disabled = true;
+  const isReConfirm = !!PhaseState.recordId;
+  btn.textContent = isReConfirm ? '⏳ กำลัง stamp ทับ…' : '⏳ กำลังสร้าง QT/SO…';
+  try {
+    let endpoint = '/api/qt-phase2';
+    let body = payload;
+    if (isReConfirm) {
+      endpoint = '/api/qt-phase2-update';
+      body = {...payload, record_id: PhaseState.recordId};
+    }
+    const r = await fetch(endpoint, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    const txt = await r.text();
+    console.log('[Confirm Phase 2] HTTP', r.status, 'body:', txt.slice(0, 500));
+    let res;
+    try { res = JSON.parse(txt); }
+    catch (e) {
+      alert(`Server returned non-JSON (status ${r.status}). ${txt ? 'Body: ' + txt.slice(0,200) : 'Empty body — restart server'}`);
+      return;
+    }
+    if (!res.ok) {
+      alert('ไม่สำเร็จ:\n' + JSON.stringify(res.error || res, null, 2));
+      return;
+    }
+    if (!isReConfirm) {
+      PhaseState.recordId = res.record_id;
+      // Prefer QT ID (short — e.g. "QTRPL-20260608-01041") over Request No. (long)
+      PhaseState.requestNo = res.qt_id || res.request_no || res.record_id;
+      document.getElementById('banner_qtno').textContent = PhaseState.requestNo;
+      persistState();
+      clearDraft();  // Phase 2 saved to Lark — local draft no longer needed
+      showPhase(3);
+    }
+    // Lock Phase 2 fields after successful confirm
+    lockPhase2();
+    // Scroll to Phase 3 first card
+    setTimeout(() => {
+      const first = document.querySelector('.phase-section[data-phase="3"]');
+      if (first) first.scrollIntoView({behavior:'smooth', block:'start'});
+    }, 150);
+  } catch (e) {
+    alert('Error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = isReConfirm
+      ? '✓ Re-Confirm (Stamp ทับของเดิม)'
+      : '✓ Confirm Booking & สร้าง QT/SO';
+  }
+});
+
+// Edit Booking — unlock Phase 2 for re-edit + reload existing values from Lark
+document.getElementById('btn_edit_phase2').addEventListener('click', async () => {
+  const btn = document.getElementById('btn_edit_phase2');
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = '⏳ กำลังโหลดข้อมูลเดิม…';
+  try {
+    if (PhaseState.recordId) {
+      // Only re-fetch if form looks empty (i.e. user resumed across sessions)
+      const looksEmpty = !document.getElementById('brand_company').value
+                      && !document.getElementById('approver').value;
+      if (looksEmpty) {
+        const r = await fetch(`/api/qt/${encodeURIComponent(PhaseState.recordId)}`);
+        const data = await r.json();
+        populatePhase2FromLark(data);
+      }
+    }
+  } catch (e) {
+    console.error('Failed to reload QT data:', e);
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+  unlockPhase2();
+  // Scroll back to top of Phase 2
+  const first = document.querySelector('.phase-section[data-phase="2"]');
+  if (first) first.scrollIntoView({behavior:'smooth', block:'start'});
+});
+
+function populatePhase2FromLark(data) {
+  const f = (data && data.parent && data.parent.fields) || {};
+  // Helper to get text value from Lark's nested shapes
+  const tv = (v) => {
+    if (v == null) return '';
+    if (typeof v === 'string') return v;
+    if (typeof v === 'number') return String(v);
+    if (Array.isArray(v)) {
+      if (!v.length) return '';
+      const first = v[0];
+      if (typeof first === 'string') return first;
+      if (first && typeof first === 'object') {
+        return first.text || first.name || first.value || first.en_name || '';
+      }
+    }
+    if (typeof v === 'object') return v.text || v.name || v.value || '';
+    return '';
+  };
+  // Phase 2 fields
+  const set = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.value = val; };
+  set('doc_type', tv(f['Document Type']) || 'Quotation');
+  set('company', tv(f['Company']) || 'RPL : RIPPLES COMMERCE');
+  set('brand_company', tv(f['Brand Company']));
+  set('customer_pic', tv(f['Customer Name ID']));
+  set('currency', tv(f['Currency']) || 'THB');
+  set('credit_term', tv(f['Credit term']));
+  if (f['Exchange Rate']) set('exchange_rate', String(f['Exchange Rate']));
+  // Approver name from User field [{id, name, en_name}]
+  const apprArr = f['Approver'];
+  if (Array.isArray(apprArr) && apprArr.length) {
+    const a = apprArr[0];
+    set('approver', a.en_name || a.name || '');
+  }
+  // Date fields are epoch ms → convert to YYYY-MM for <input type="month">
+  const toMonthInput = (ms) => {
+    if (!ms) return '';
+    const d = new Date(Number(ms));
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  };
+  // Set hidden + the new month/year dropdowns
+  const startYM = toMonthInput(f['Start Date']);
+  const endYM = toMonthInput(f['End date']);
+  set('start_date', startYM);
+  set('end_date', endYM);
+  if (startYM) {
+    const [sy, sm] = startYM.split('-');
+    set('start_year', sy); set('start_month', sm);
+  }
+  if (endYM) {
+    const [ey, em] = endYM.split('-');
+    set('end_year', ey); set('end_month', em);
+  }
+  // Update the custom-picker label/state to reflect loaded values
+  if (window.MYPicker) {
+    MYPicker.refresh('start');
+    MYPicker.refresh('end');
+  }
+
+  // Trigger update side-effects (info cards, credit-term options, period display).
+  // IMPORTANT: dispatch brand_company FIRST so credit_term dropdown gets repopulated
+  // with options for that brand, THEN re-apply the saved credit_term value.
+  const savedCreditTerm = tv(f['Credit term']);
+  ['brand_company','customer_pic','approver','currency','start_date','end_date'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.dispatchEvent(new Event('input', {bubbles: true}));
+  });
+  // Close any custom dropdowns that the input dispatches may have opened
+  // (during programmatic prefill — user didn't actually focus these fields)
+  document.querySelectorAll('.custom-dropdown.open').forEach(dd => dd.classList.remove('open'));
+  // Re-apply Credit term AFTER brand_company input event populated the dropdown
+  if (savedCreditTerm) {
+    setTimeout(() => {
+      const ct = document.getElementById('credit_term');
+      if (ct) {
+        // Check if the value is a valid option; if so, select it
+        const hasOpt = Array.from(ct.options).some(o => o.value === savedCreditTerm);
+        if (hasOpt) ct.value = savedCreditTerm;
+      }
+    }, 50);
+  }
+  if (typeof updateExchangeRate === 'function') updateExchangeRate();
+  if (typeof refreshPeriodHints === 'function') refreshPeriodHints();
+}
+
+// --- Phase 3 Submit: PATCH parent + create QT Detail lines ---
+async function submitPhase3() {
+  if (!PhaseState.recordId) {
+    showErrToast('ยังไม่มี QT/SO — กรุณากด Confirm Booking ก่อน');
+    return;
+  }
+  let payload = buildPayload();
+  if (!payload) return;
+  payload.record_id = PhaseState.recordId;
+  const btn = document.getElementById('submit_btn');
+  const status = document.getElementById('submit_status');
+  btn.disabled = true; btn.textContent = '⏳ กำลังบันทึก…';
+  status.textContent = '';
+  try {
+    const r = await fetch('/api/qt-phase3', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const txt = await r.text();
+    let res;
+    try { res = JSON.parse(txt); }
+    catch (e) {
+      status.innerHTML = `<span style="color:#dc2626;">Server returned non-JSON (HTTP ${r.status}). ${txt ? escapeHtml(txt.slice(0,300)) : 'Empty body — restart server'}</span>`;
+      return;
+    }
+    if (res.ok) {
+      showDonePage(res);
+      return;
+    }
+    // Friendly handling for the safety guard (QT already has line items)
+    if (res.step === 'phase3_safety_check' && res.error === 'already_has_lines') {
+      status.innerHTML = `<div style="color:#b45309;background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;line-height:1.5;">
+        <b>⚠️ ไม่สามารถบันทึกซ้ำได้</b><br>${escapeHtml(res.message || '')}
+      </div>`;
+      return;
+    }
+    status.innerHTML = `<span style="color:#dc2626;">บันทึกผิดพลาด: ${escapeHtml(JSON.stringify(res.error || res.line_errors || res, null, 2))}</span>`;
+  } catch (e) {
+    status.innerHTML = `<span style="color:#dc2626;">Error: ${escapeHtml(e.message)}</span>`;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Submit QT';
+  }
+}
+
+// === Live QT Preview side-pane wiring ===
+(function() {
+  const pane = document.getElementById('prev_pane');
+  const body = document.getElementById('prev_pane_body');
+  const toggle = document.getElementById('prev_toggle');
+  const closeBtn = document.getElementById('prev_close');
+  const refreshBtn = document.getElementById('prev_refresh');
+  let pending = null;
+
+  // Track in-flight requests so a stale response can't overwrite a fresher one
+  let _renderSeq = 0;
+
+  async function renderPreview() {
+    let payload;
+    try { payload = buildPayload({ soft: true }); } catch (e) { /* ignore */ }
+    if (!payload) {
+      // Only show empty-state when there's nothing rendered yet — keep existing preview otherwise
+      if (!body.querySelector('iframe')) {
+        body.innerHTML = '<div id="prev_pane_empty">กรอกข้อมูลก่อนสักนิด แล้วกด Refresh</div>';
+      }
+      return;
+    }
+    const seq = ++_renderSeq;
+    // Show subtle hourglass spinner in pane header while fetching
+    const spinner = document.getElementById('prev_loading');
+    if (spinner) spinner.style.display = 'inline-block';
+    try {
+      // Pass real QT ID + Request No. if available (after Phase 2 Confirm) so the
+      // preview shows the actual number instead of "DRAFT (not yet saved)".
+      const renderBody = {
+        ...payload,
+        mode: 'quotation',
+        qt_id: PhaseState.requestNo || '',
+        request_no: PhaseState.requestNo || '',
+      };
+      const r = await fetch('/api/draft-render', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(renderBody),
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const html = await r.text();
+      // Ignore stale responses (user typed again while this was in-flight)
+      if (seq !== _renderSeq) return;
+      // Try updating the EXISTING iframe in-place to avoid the flash of unstyled
+      // empty pane between renders. Only fall back to creating a new iframe if
+      // there isn't one yet (first render).
+      let iframe = body.querySelector('iframe');
+      if (!iframe) {
+        body.innerHTML = '';
+        iframe = document.createElement('iframe');
+        body.appendChild(iframe);
+      }
+      iframe.srcdoc = html;
+    } catch (e) {
+      if (seq !== _renderSeq) return;
+      // Don't wipe a working preview on transient errors — only show error if nothing rendered yet
+      if (!body.querySelector('iframe')) {
+        body.innerHTML = `<div id="prev_pane_empty" style="color:#dc2626;">Failed: ${escapeHtml(e.message)}</div>`;
+      }
+    } finally {
+      // Hide spinner only when this is the latest render (don't flicker if newer one is in flight)
+      if (seq === _renderSeq && spinner) spinner.style.display = 'none';
+    }
+  }
+
+  // Fields that ACTUALLY appear on the QT preview document.
+  // Changes to these trigger a re-render. Everything else (AM Outsource,
+  // Billing Timing, Memo, Project, Brand's Confirm files, Created by, Type of Work,
+  // Exchange Rate, internal Remark) is hidden from preview → skip re-render.
+  const PREVIEW_FIELDS = new Set([
+    'brand_company', 'customer_pic', 'approver',
+    'doc_type', 'currency', 'credit_term',
+    'start_month', 'start_year', 'start_date', 'end_date',
+  ]);
+
+  function affectsPreview(target) {
+    if (!target) return false;
+    // Line item table changes (BU select, item select, qty, unit price, desc fields,
+    // per-line month/year, desc_mode) → these don't have stable IDs. Detect via parent table.
+    if (target.closest && target.closest('.items-table')) return true;
+    // Explicit ID list above
+    if (target.id && PREVIEW_FIELDS.has(target.id)) return true;
+    return false;
+  }
+
+  function scheduleAuto(ev) {
+    if (!pane.classList.contains('open')) return;
+    if (!affectsPreview(ev && ev.target)) return;  // skip fields not shown on QT
+    if (pending) clearTimeout(pending);
+    pending = setTimeout(renderPreview, 700);
+  }
+
+  toggle.addEventListener('click', () => {
+    pane.classList.add('open');
+    document.body.classList.add('preview-open');
+    pane.setAttribute('aria-hidden', 'false');
+    toggle.style.display = 'none';
+    renderPreview();
+  });
+  closeBtn.addEventListener('click', () => {
+    pane.classList.remove('open');
+    document.body.classList.remove('preview-open');
+    pane.setAttribute('aria-hidden', 'true');
+    toggle.style.display = '';
+  });
+  refreshBtn.addEventListener('click', renderPreview);
+
+  // Auto-refresh when form changes (debounced)
+  document.addEventListener('input', scheduleAuto);
+  document.addEventListener('change', scheduleAuto);
+})();
+
+// Logout button
+document.getElementById('btn_logout')?.addEventListener('click', async () => {
+  const ok = await showConfirm({
+    title: 'Logout',
+    message: 'ออกจากระบบ Lark?',
+    okText: 'Logout',
+    cancelText: 'ยกเลิก',
+    icon: '🚪',
+  });
+  if (ok) window.location = '/api/auth/logout';
+});
+
+// Back button: Phase 2 → Phase 1 (only when QT not yet created)
+document.getElementById('btn_back_phase1')?.addEventListener('click', async () => {
+  if (PhaseState.recordId) {
+    showErrToast('QT/SO สร้างแล้ว — ใช้ปุ่ม "+ สร้าง QT/SO ใหม่" แทน');
+    return;
+  }
+  const ok = await showConfirm({
+    title: 'ยืนยันการย้อนกลับ',
+    message: 'หากกดย้อนกลับ ข้อมูลที่กรอกไว้จะหายไป',
+    okText: 'ย้อนกลับ',
+    cancelText: 'ยกเลิก',
+    icon: '↩️',
+  });
+  if (ok) {
+    resetFormForNewQT();
+    showPhase(1);
+  }
+});
+
+// === Dev Mode: bypass Lark OAuth for testing ===
+(function setupDevMode() {
+  const toggleBtn = document.getElementById('btn_dev_toggle');
+  const picker = document.getElementById('dev_picker');
+  const listDiv = document.getElementById('dev_employee_list');
+  const search = document.getElementById('dev_search');
+  if (!toggleBtn) return;
+  let employees = [];
+
+  function renderList(filter) {
+    const q = (filter || '').toLowerCase().trim();
+    // Split query by spaces — each word must be present in any of the name fields (AND)
+    const terms = q.split(/\s+/).filter(Boolean);
+    const matched = employees.filter(e => {
+      if (!terms.length) return true;
+      const haystack = [
+        e.en_name || '', e.name || '', e.lark_name || '',
+        e.title || '', e.dept || '', e.email || ''
+      ].join(' ').toLowerCase();
+      return terms.every(t => haystack.includes(t));
+    });
+    // Show count header
+    const total = employees.length;
+    const shown = matched.length;
+    const header = `<div style="padding:6px 12px; background:var(--primary-soft); color:var(--primary); font-size:11px; font-weight:600; border-bottom:1px solid var(--border);">${shown} / ${total} คน</div>`;
+    listDiv.innerHTML = header + matched.map(e => {
+      const label = e.en_name || e.lark_name || e.name || '?';
+      const avatar = e.avatar_url
+        ? `<img src="${escapeAttr(e.avatar_url)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">`
+        : `<div style="width:28px;height:28px;border-radius:50%;background:var(--primary-gradient);color:white;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;">${escapeHtml(label[0].toUpperCase())}</div>`;
+      return `<div class="dev-emp" data-oid="${escapeAttr(e.open_id)}" style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-bottom:1px solid #f3f4f6;font-size:12.5px;">
+        ${avatar}
+        <div style="min-width:0;flex:1;">
+          <div style="font-weight:600;color:var(--text);">${escapeHtml(label)}</div>
+          ${e.title ? `<div style="font-size:10.5px;color:var(--muted);">${escapeHtml(e.title)}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('') || '<div style="padding:14px;text-align:center;color:var(--muted);font-size:12px;">ไม่พบ</div>';
+    listDiv.querySelectorAll('.dev-emp').forEach(el => {
+      el.addEventListener('mouseenter', () => el.style.background = 'var(--primary-soft)');
+      el.addEventListener('mouseleave', () => el.style.background = '');
+      el.addEventListener('click', async () => {
+        const oid = el.dataset.oid;
+        el.style.opacity = '0.5';
+        try {
+          const r = await fetch('/api/auth/dev-login', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({open_id: oid}),
+          });
+          const res = await r.json();
+          if (res.ok) {
+            window.location.reload();
+          } else {
+            showErrToast(res.error || 'Dev login failed');
+            el.style.opacity = '1';
+          }
+        } catch (e) {
+          showErrToast('Error: ' + e.message);
+          el.style.opacity = '1';
+        }
+      });
+    });
+  }
+
+  toggleBtn.addEventListener('click', async () => {
+    if (picker.style.display === 'none') {
+      picker.style.display = 'block';
+      if (!employees.length) {
+        listDiv.innerHTML = '<div style="padding:14px;text-align:center;color:var(--muted);font-size:12px;">⏳ กำลังโหลด…</div>';
+        try {
+          const r = await fetch('/api/auth/dev-employees');
+          employees = await r.json();
+          renderList('');
+        } catch (e) {
+          listDiv.innerHTML = `<div style="padding:14px;color:var(--danger);font-size:12px;">Failed: ${e.message}</div>`;
+        }
+      }
+    } else {
+      picker.style.display = 'none';
+    }
+  });
+  search?.addEventListener('input', () => renderList(search.value));
+})();
+
+// Init phase UI: resume if there's persisted state, else show Phase 1
+if (!loadPersistedState()) {
+  showPhase(1);
+}
+
+bootstrap();
+</script>
+</body>
+</html>
