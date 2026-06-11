@@ -420,46 +420,402 @@ def api_auth_logout():
     resp.set_cookie("sid", "", max_age=0, httponly=True, samesite="Lax")
     return resp
 
-# ─── Write endpoints (stubs — TODO port from server.py) ──────────────────────
-# These all return a clear "not yet implemented" error so the frontend shows
-# a friendly message instead of crashing on a 404. Port from server.py:
-#   _qt_phase2 / _qt_phase2_update / _qt_phase3 / _create_lines_only / _qt_lookup
-# Write endpoints REQUIRE a user_access_token in the session (from OAuth) to
-# bypass field-level protection on the 4 SingleSelect fields in prod base.
+# ─── Write helpers (ported from server.py) ───────────────────────────────────
 
-def _write_stub():
-    return jsonify({
-        "ok": False,
-        "error": "write_not_implemented",
-        "message": "Write endpoints are not yet ported to the Vercel build. "
-                   "Use the local Python server (port 3000) for submits until "
-                   "qt-phase2/qt-phase3 are added in the next deploy.",
-    }), 501
+def _build_parent_fields(payload: dict, scope: str = "all") -> tuple[dict, list]:
+    """Build QT Management field dict from payload + drop unknown SingleSelect values.
+    scope='phase2'  → booking fields only.
+    scope='phase3'  → finalize-add fields (currency, type_of_work, status).
+    scope='all'     → both (used on PATCH at submit).
+    Returns (fields, skipped_invalid_options)."""
+    fields: dict = {}
+    is_p2 = scope in ("phase2", "all")
+    is_p3 = scope in ("phase3", "all")
+
+    def setk(k: str, v):
+        if v not in (None, "", []):
+            fields[k] = v
+
+    if is_p2:
+        setk("Company", payload.get("company") or "RPL : RIPPLES COMMERCE")
+        setk("Document Type", payload.get("doc_type") or "Quotation")
+        setk("Brand Company", payload.get("brand_company"))
+        setk("Customer Name ID", payload.get("customer_pic"))
+        if scope == "phase2":
+            setk("Status", payload.get("status") or "QT Booked")
+        if payload.get("start_date"):
+            fields["Start Date"] = int(payload["start_date"])
+        if payload.get("end_date"):
+            fields["End date"] = int(payload["end_date"])
+        if payload.get("approver_open_id"):
+            fields["Approver"] = [{"id": payload["approver_open_id"]}]
+        if payload.get("created_by_open_id"):
+            fields["QT Confirm Create by"] = [{"id": payload["created_by_open_id"]}]
+        att = payload.get("attachment_tokens") or []
+        if att:
+            fields["Brand's Confirm"] = [{"file_token": t} for t in att if t]
+        if payload.get("credit_term"):
+            fields["Credit term"] = str(payload["credit_term"]).strip()
+
+    if is_p3:
+        setk("Type of Work", payload.get("type_of_work"))
+        setk("Currency", payload.get("currency") or "THB")
+        if payload.get("exchange_rate"):
+            fields["Exchange Rate"] = float(payload["exchange_rate"])
+        if scope in ("phase3", "all"):
+            fields["Status"] = payload.get("status") or "QT requested"
+
+    # Strip SingleSelect values not present in the field's option list
+    ss_fields = ["Company", "Brand Company", "Customer Name ID",
+                 "Type of Work", "Currency", "Document Type", "Status", "Credit term"]
+    skipped = []
+    for fname in ss_fields:
+        if fname not in fields: continue
+        idx = get_field_option_index(TABLES["qt_mgmt"], fname)
+        val = fields[fname]
+        if not isinstance(val, str) or not val: continue
+        if val in idx: continue
+        v_norm = val.strip().lower()
+        canonical = next((n for n in idx if n.strip().lower() == v_norm), None)
+        if canonical:
+            fields[fname] = canonical
+        else:
+            fields.pop(fname)
+            skipped.append({"field": fname, "value": val})
+    return fields, skipped
+
+
+def _write_parent_with_retry(parent_fields: dict, record_id: str | None = None,
+                              method: str = "POST", token: str | None = None) -> tuple[dict, dict]:
+    """POST (create) or PUT (update) parent fields with progressive drop-retry."""
+    tok = token or get_token()
+    base = f"/open-apis/bitable/v1/apps/{BASE_APP_TOKEN}/tables/{TABLES['qt_mgmt']}/records"
+    url = f"{base}/{record_id}" if record_id else base
+    res = lark_request(method, url, {"fields": parent_fields}, token=tok)
+    for drop in ("Credit term", "Brand's Confirm", "QT Confirm Create by", "Approver"):
+        if res.get("code") == 0: break
+        if drop in parent_fields:
+            parent_fields = {k: v for k, v in parent_fields.items() if k != drop}
+            res = lark_request(method, url, {"fields": parent_fields}, token=tok)
+    return res, parent_fields
+
+
+def _count_existing_lines(parent_id: str) -> list[str]:
+    """Returns the line record_ids that link back to this parent. SAFE — read-only.
+    Phase 3 uses this to refuse re-submits (no destructive ops on prod base)."""
+    all_lines = fetch_all_records(TABLES["qtso_detail"], ["QT&SO Management"])
+    existing = []
+    for r in all_lines:
+        link = r.get("fields", {}).get("QT&SO Management") or []
+        ids = []
+        if isinstance(link, list):
+            for x in link:
+                if isinstance(x, dict):
+                    ids.append(x.get("record_id") or x.get("id"))
+                else:
+                    ids.append(x)
+        if parent_id in ids:
+            existing.append(r["record_id"])
+    return existing
+
+
+def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) -> dict:
+    """Create QT&SO Detail lines. When user_token is supplied, writes use the
+    user's identity (bypasses field-level protection on the 4 locked SingleSelects).
+    Adaptive strip on 1254062 — drops one SS field at a time to find the culprit."""
+    token = user_token or get_token()
+    created_lines: list[str] = []
+    line_errors: list[dict] = []
+    warnings: list[dict] = []
+    remark_text = payload.get("remark") or ""
+    LAST_YES = "ใช่ record นี้เป็นบรรทัดสุดท้าย พร้อมส่งข้อมูลทั้งหมดให้ ทีม Sale-co create document แล้ว"
+    LAST_NO = "ไม่ใช่ ฉันยังต้องการเพิ่มบรรทัดอยู่"
+    MONTH_NUM = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
+                 "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
+    VALID_DESC_MODES = {
+        "ต้องการเขียน Description ด้วยตนเอง",
+        "ต้องการเขียน Description เพิ่มเติม",
+        "ไม่ต้องการเขียน Description เพิ่มเติม",
+    }
+    SS_FIELDS = {
+        "Item for Selection", "BU with Description", "เหตุผลที่ AM Outsource",
+        "Period Type", "Starting month", "Working Year", "เก็บเงินได้เลยไหม",
+        "ท่านต้องการเขียน Description เพิ่มเติมหรือไม่",
+    }
+    lines = payload.get("lines", []) or []
+    total = len(lines)
+
+    for idx, line in enumerate(lines):
+        lf: dict = {"QT&SO Management": [parent_id]}
+        if line.get("item_selection"):
+            lf["Item for Selection"] = line["item_selection"]
+        if line.get("bu"):
+            bu_short = line["bu"].strip().lower()
+            bu_idx = get_field_option_index(TABLES["qtso_detail"], "BU with Description")
+            matches = [n for n in bu_idx
+                       if re.split(r"[:—\-]", n.lower(), maxsplit=1)[0].strip() == bu_short]
+            em = next((n for n in matches if "—" in n), None)
+            bu_full = em or (matches[0] if matches else None)
+            if bu_full: lf["BU with Description"] = bu_full
+        if line.get("quantity") is not None:
+            lf["Quantity"] = float(line["quantity"])
+        if line.get("unit_price") is not None:
+            lf["Unit Price"] = float(line["unit_price"])
+        if line.get("am_outsourced"):
+            lf["AM Outsourced"] = True
+            if line.get("am_reason"): lf["เหตุผลที่ AM Outsource"] = line["am_reason"]
+            if line.get("am_reason_detail"): lf["อธิบายเหตุผลที่ AM Outsource"] = line["am_reason_detail"]
+        if line.get("period_type"): lf["Period Type"] = line["period_type"]
+        if line.get("starting_month"): lf["Starting month"] = line["starting_month"]
+        if line.get("working_year"): lf["Working Year"] = line["working_year"]
+        if line.get("can_bill_now"): lf["เก็บเงินได้เลยไหม"] = line["can_bill_now"]
+        if line.get("memo_done"): lf["สั่งงานยัง"] = True
+        if line.get("project_link_id"): lf["Project Link"] = [line["project_link_id"]]
+        if line.get("project_detail"): lf["Project Detail"] = line["project_detail"]
+
+        desc_mode = line.get("desc_mode") or ""
+        user_input = (line.get("desc_input") or "").strip().strip(",").strip()
+        if desc_mode in VALID_DESC_MODES:
+            lf["ท่านต้องการเขียน Description เพิ่มเติมหรือไม่"] = desc_mode
+        if desc_mode in ("ต้องการเขียน Description ด้วยตนเอง",
+                         "ต้องการเขียน Description เพิ่มเติม") and user_input:
+            lf["Description Input"] = user_input
+
+        sm, wy = line.get("starting_month"), line.get("working_year")
+        if sm in MONTH_NUM and wy:
+            try:
+                epoch_ms = int(time.mktime(time.strptime(f"{wy}-{MONTH_NUM[sm]:02d}-01", "%Y-%m-%d")) * 1000)
+                lf["Date Working (Month)"] = epoch_ms
+            except Exception:
+                pass
+        lf["Last item"] = LAST_YES if idx == total - 1 else LAST_NO
+        if idx == 0 and remark_text: lf["Remark"] = remark_text
+
+        post_url = f"/open-apis/bitable/v1/apps/{BASE_APP_TOKEN}/tables/{TABLES['qtso_detail']}/records"
+        res = lark_request("POST", post_url, {"fields": lf}, token=token)
+        stripped: list[str] = []
+        initial_snapshot = None
+        if res.get("code") != 0:
+            initial_snapshot = {k: v for k, v in lf.items() if k != "QT&SO Management"}
+            # Stage 1: drop automation-owned fields
+            AUTO_OWNED = {"Item (Not Used)", "Last item", "Date Working (Month)"}
+            if any(k in lf for k in AUTO_OWNED):
+                stripped.extend([k for k in lf if k in AUTO_OWNED])
+                lf = {k: v for k, v in lf.items() if k not in AUTO_OWNED}
+                res = lark_request("POST", post_url, {"fields": lf}, token=token)
+            # Stage 2: drop desc_mode
+            if res.get("code") != 0 and "ท่านต้องการเขียน Description เพิ่มเติมหรือไม่" in lf:
+                lf = {k: v for k, v in lf.items() if k != "ท่านต้องการเขียน Description เพิ่มเติมหรือไม่"}
+                stripped.append("ท่านต้องการเขียน Description เพิ่มเติมหรือไม่")
+                res = lark_request("POST", post_url, {"fields": lf}, token=token)
+            # Stage 3: adaptive single-strip on 1254062
+            if res.get("code") == 1254062:
+                for candidate in [k for k in list(lf.keys()) if k in SS_FIELDS]:
+                    trial_lf = {k: v for k, v in lf.items() if k != candidate}
+                    trial_res = lark_request("POST", post_url, {"fields": trial_lf}, token=token)
+                    if trial_res.get("code") == 0:
+                        stripped.append(candidate)
+                        warnings.append({
+                            "line_index": idx,
+                            "ss_value_rejected": {candidate: lf.get(candidate)},
+                            "hint": "value doesn't match any option in prod base — fix mapping",
+                        })
+                        lf, res = trial_lf, trial_res
+                        break
+        if res.get("code") != 0:
+            line_errors.append({
+                "index": idx, "error": res, "stripped": stripped,
+                "sent_fields": initial_snapshot,
+            })
+        else:
+            created_lines.append(res["data"]["record"]["record_id"])
+            if stripped:
+                warnings.append({"line_index": idx, "fields_dropped": stripped})
+    return {"created_lines": created_lines, "line_errors": line_errors, "warnings": warnings}
+
+
+def _get_qt_full(record_id: str) -> dict:
+    """Fetch parent QT Mgmt record + its linked detail rows."""
+    token = get_token()
+    pr = lark_request("GET",
+        f"/open-apis/bitable/v1/apps/{BASE_APP_TOKEN}/tables/{TABLES['qt_mgmt']}/records/{record_id}",
+        token=token)
+    if pr.get("code") != 0:
+        return {"error": pr}
+    rec = pr["data"]["record"]
+    f = rec.get("fields", {})
+    detail = f.get("Detail") or []
+    line_ids = []
+    for d in detail if isinstance(detail, list) else []:
+        if isinstance(d, dict):
+            line_ids.extend(d.get("record_ids") or [])
+    items = []
+    for lid in line_ids:
+        lr = lark_request("GET",
+            f"/open-apis/bitable/v1/apps/{BASE_APP_TOKEN}/tables/{TABLES['qtso_detail']}/records/{lid}",
+            token=token)
+        if lr.get("code") == 0:
+            items.append(lr["data"]["record"])
+    return {"parent": rec, "lines": items}
+
+# ─── Write endpoints ─────────────────────────────────────────────────────────
 
 @app.route("/api/qt-phase2", methods=["POST"])
-def api_qt_phase2(): return _write_stub()
+def api_qt_phase2():
+    payload = request.get_json(silent=True) or {}
+    sess = get_session()
+    if sess:
+        payload["created_by_open_id"] = payload.get("created_by_open_id") or sess.get("open_id")
+        payload["created_by_name"] = payload.get("created_by_name") or sess.get("en_name") or sess.get("name")
+    fields, skipped = _build_parent_fields(payload, scope="phase2")
+    res, _ = _write_parent_with_retry(fields)
+    if res.get("code") != 0:
+        return jsonify({"ok": False, "step": "phase2_create", "error": res,
+                        "skipped_invalid_options": skipped,
+                        "fields_attempted": list(fields.keys())})
+    rec = res["data"]["record"]
+    record_id = rec["record_id"]
+    qt_id = text_val(rec["fields"].get("QT ID"))
+    request_no = text_val(rec["fields"].get("Request No."))
+    # Short poll (~3s max) — Vercel function timeout caps at 10s on Hobby
+    if not qt_id or not request_no:
+        for _ in range(6):
+            time.sleep(0.5)
+            chk = lark_request("GET",
+                f"/open-apis/bitable/v1/apps/{BASE_APP_TOKEN}/tables/{TABLES['qt_mgmt']}/records/{record_id}",
+                token=get_token())
+            if chk.get("code") == 0:
+                f2 = chk["data"]["record"]["fields"]
+                qt_id = qt_id or text_val(f2.get("QT ID"))
+                request_no = request_no or text_val(f2.get("Request No."))
+                if qt_id and request_no: break
+    return jsonify({"ok": True, "record_id": record_id,
+                    "qt_id": qt_id, "request_no": request_no,
+                    "skipped_invalid_options": skipped})
+
 
 @app.route("/api/qt-phase2-update", methods=["POST"])
-def api_qt_phase2_update(): return _write_stub()
+def api_qt_phase2_update():
+    payload = request.get_json(silent=True) or {}
+    sess = get_session()
+    if sess:
+        payload["created_by_open_id"] = payload.get("created_by_open_id") or sess.get("open_id")
+    rid = payload.get("record_id")
+    if not rid:
+        return jsonify({"ok": False, "error": "record_id required"}), 400
+    fields, skipped = _build_parent_fields(payload, scope="phase2")
+    fields.pop("Status", None)  # preserve existing Lark status on re-edit
+    res, _ = _write_parent_with_retry(fields, record_id=rid, method="PUT")
+    return jsonify({
+        "ok": res.get("code") == 0, "record_id": rid,
+        "error": res if res.get("code") != 0 else None,
+        "skipped_invalid_options": skipped,
+    })
+
 
 @app.route("/api/qt-phase3", methods=["POST"])
-def api_qt_phase3(): return _write_stub()
+def api_qt_phase3():
+    payload = request.get_json(silent=True) or {}
+    sess = get_session()
+    user_token = sess.get("user_access_token") if sess else None
+    if sess:
+        payload["created_by_open_id"] = payload.get("created_by_open_id") or sess.get("open_id")
+        payload["created_by_name"] = payload.get("created_by_name") or sess.get("en_name") or sess.get("name")
+
+    record_id = payload.get("record_id")
+    if not record_id:
+        return jsonify({"ok": False, "error": "record_id required"}), 400
+
+    # SAFETY: refuse re-submit when lines already exist (never deletes).
+    existing = _count_existing_lines(record_id)
+    if existing:
+        return jsonify({
+            "ok": False,
+            "step": "phase3_safety_check",
+            "error": "already_has_lines",
+            "message": (f"QT นี้มี Line Items อยู่แล้ว {len(existing)} แถว — "
+                        "ระบบไม่อนุญาตให้แก้ไขซ้ำ (ป้องกันการลบข้อมูลโดยไม่ตั้งใจ). "
+                        "กรุณาแก้ไขใน Lark Base โดยตรง หรือสร้าง QT ใหม่."),
+            "existing_line_count": len(existing),
+        })
+
+    all_fields, skipped = _build_parent_fields(payload, scope="all")
+    upd_res, _ = _write_parent_with_retry(all_fields, record_id=record_id, method="PUT")
+    if upd_res.get("code") != 0:
+        return jsonify({"ok": False, "step": "phase3_patch_parent",
+                        "error": upd_res, "skipped_invalid_options": skipped})
+
+    result = _create_lines(payload, record_id, user_token=user_token)
+
+    # Fetch latest Request No. for the response (1 quick GET, no polling — Vercel timeout)
+    latest_request_no = ""
+    try:
+        chk = lark_request("GET",
+            f"/open-apis/bitable/v1/apps/{BASE_APP_TOKEN}/tables/{TABLES['qt_mgmt']}/records/{record_id}",
+            token=get_token())
+        if chk.get("code") == 0:
+            latest_request_no = text_val(chk["data"]["record"]["fields"].get("Request No."))
+    except Exception:
+        pass
+
+    return jsonify({
+        "ok": not result.get("line_errors"),
+        "record_id": record_id,
+        "request_no": latest_request_no,
+        "deleted_old_lines": 0,
+        "created_lines": result.get("created_lines", []),
+        "line_errors": result.get("line_errors", []),
+        "warnings": result.get("warnings", []),
+        "skipped_invalid_options": skipped,
+        "pdf_attached_to": None,
+        "parent_fields_written": list(all_fields.keys()),
+    })
+
 
 @app.route("/api/qt-lookup", methods=["POST"])
-def api_qt_lookup(): return _write_stub()
+def api_qt_lookup():
+    payload = request.get_json(silent=True) or {}
+    q = (payload.get("qt_id") or payload.get("request_no") or "").strip()
+    if not q:
+        return jsonify({"ok": False, "error": "qt_id required"}), 400
+    recs = fetch_all_records(TABLES["qt_mgmt"], None)
+    match = None
+    for r in recs:
+        f = r.get("fields", {})
+        if text_val(f.get("QT ID")) == q or text_val(f.get("Request No.")) == q:
+            match = r
+            break
+    if not match:
+        return jsonify({"ok": False, "error": f"QT '{q}' not found"}), 404
+    parent_id = match["record_id"]
+    return jsonify({
+        "ok": True,
+        "record_id": parent_id,
+        "qt_id": text_val(match["fields"].get("QT ID")),
+        "request_no": text_val(match["fields"].get("Request No.")),
+        "data": _get_qt_full(parent_id),
+    })
 
-@app.route("/api/draft-render", methods=["POST"])
-def api_draft_render():
-    # Frontend's preview pane polls this constantly — return an empty HTML
-    # placeholder so it doesn't display a noisy error in the side-panel.
-    return ('<html><body style="font-family:Sarabun,sans-serif;padding:40px;'
-            'text-align:center;color:#666;">Preview not yet available in '
-            'Vercel build — coming soon.</body></html>',
-            200, {"Content-Type": "text/html; charset=utf-8"})
 
 @app.route("/api/qt/<record_id>", methods=["GET"])
 def api_qt_record(record_id):
-    return jsonify({"error": "not_implemented", "record_id": record_id}), 501
+    return jsonify(_get_qt_full(record_id))
+
+
+@app.route("/api/draft-render", methods=["POST"])
+def api_draft_render():
+    # PDF generation is removed in the Vercel build (no headless Chrome).
+    # The frontend preview pane still calls this on every change — return a
+    # lightweight HTML placeholder so the side-pane stays clean instead of
+    # showing errors. The user can preview the final document in Lark Base.
+    return ('<html><body style="font-family:Sarabun,sans-serif;padding:40px;'
+            'text-align:center;color:#666;line-height:1.6;">'
+            '<div style="font-size:18px;margin-bottom:10px;">📄 Live Preview</div>'
+            '<div>PDF preview ใช้งานได้ใน Lark Base โดยตรงหลัง Submit</div>'
+            '<div style="margin-top:8px;font-size:12px;">'
+            '(การ render PDF ถูกตัดออกในเวอร์ชัน Vercel เพื่อให้ deploy serverless ได้)'
+            '</div></body></html>',
+            200, {"Content-Type": "text/html; charset=utf-8"})
 
 # ─── Static fallback (Vercel routes / → public/index.html directly) ──────────
 

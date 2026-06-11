@@ -47,14 +47,19 @@ PORT=3000 python3 api/index.py
 | `GET /api/auth/login` | ✅ |
 | `GET /api/auth/lark/callback` | ✅ |
 | `GET /api/auth/logout` | ✅ |
-| `POST /api/qt-phase2` | ⏳ TODO |
-| `POST /api/qt-phase2-update` | ⏳ TODO |
-| `POST /api/qt-phase3` | ⏳ TODO |
-| `POST /api/qt-lookup` | ⏳ TODO |
-| `POST /api/draft-render` | ⏳ TODO |
-| `GET /api/qt/<record_id>` | ⏳ TODO |
-| PDF generation | ❌ skipped — Lark already auto-fills Detail Short Cut |
+| `POST /api/qt-phase2` | ✅ |
+| `POST /api/qt-phase2-update` | ✅ |
+| `POST /api/qt-phase3` | ✅ (with safety guard + adaptive SS strip) |
+| `POST /api/qt-lookup` | ✅ |
+| `POST /api/draft-render` | ⚠️ placeholder (no PDF on serverless) |
+| `GET /api/qt/<record_id>` | ✅ |
+| PDF generation | ❌ skipped — preview via Lark Base directly |
 
-Phase 1 (read + auth + UI) is deploy-ready. Submit flow (writes) needs
-porting from the original Python server in `/Users/pusita/App QT&SO/server.py`
-(`_qt_phase2`, `_qt_phase2_update`, `_qt_phase3`, `_create_lines_only`).
+All endpoints ported. The submit flow:
+- Phase 2 creates the QT Management parent (≤3s poll for QT ID / Request No.)
+- Phase 3 PATCHes the parent + creates Detail lines
+- If parent already has lines → returns `phase3_safety_check` (no destructive ops)
+- Each line tries POST as user → falls back through adaptive SingleSelect strip
+  if the prod base's field protection rejects it
+- PDF generation is removed (no headless Chrome on Vercel); the user previews
+  the final QT inside Lark Base instead
