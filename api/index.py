@@ -530,10 +530,16 @@ def _count_existing_lines(parent_id: str) -> list[str]:
 
 
 def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) -> dict:
-    """Create QT&SO Detail lines. When user_token is supplied, writes use the
-    user's identity (bypasses field-level protection on the 4 locked SingleSelects).
+    """Create QT&SO Detail lines. Strategy:
+      1) If user_token is supplied, try it FIRST (bypasses field-level protection
+         on the 4 locked SingleSelects).
+      2) If user_token returns 99991679 ("user lacks bitable scope"), automatically
+         fall back to tenant_token — the strip will drop the 4 protected fields
+         but at least the row gets created with the rest.
     Adaptive strip on 1254062 — drops one SS field at a time to find the culprit."""
-    token = user_token or get_token()
+    primary_token = user_token or get_token()
+    fallback_token = get_token() if user_token else None
+    token = primary_token
     created_lines: list[str] = []
     line_errors: list[dict] = []
     warnings: list[dict] = []
@@ -603,6 +609,21 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
 
         post_url = f"/open-apis/bitable/v1/apps/{BASE_APP_TOKEN}/tables/{TABLES['qtso_detail']}/records"
         res = lark_request("POST", post_url, {"fields": lf}, token=token)
+        # If user_token lacks bitable scope (99991679), fall back to tenant_token
+        # for this and subsequent lines. Surface a warning so the operator knows
+        # to add the missing OAuth scopes in the Lark Developer Console.
+        if (res.get("code") == 99991679 or "99991679" in (res.get("body") or "")) and fallback_token:
+            warnings.append({
+                "line_index": idx,
+                "fallback_to_tenant": True,
+                "hint": "user_access_token lacks bitable:app / base:record:create scope. "
+                        "Add these in Lark Developer Console → Permissions & Scopes, "
+                        "then logout/login again. Falling back to tenant_token (will "
+                        "strip the 4 field-protected SingleSelects).",
+            })
+            token = fallback_token
+            fallback_token = None  # only switch once per submit
+            res = lark_request("POST", post_url, {"fields": lf}, token=token)
         stripped: list[str] = []
         initial_snapshot = None
         if res.get("code") != 0:
