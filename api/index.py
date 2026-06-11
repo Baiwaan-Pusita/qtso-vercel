@@ -609,44 +609,54 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
 
         post_url = f"/open-apis/bitable/v1/apps/{BASE_APP_TOKEN}/tables/{TABLES['qtso_detail']}/records"
 
-        # When using tenant_token (no OAuth user_token), pre-strip the 4 fields
-        # we know are field-protected on the prod base. Sending them yields
-        # 1254062 and the adaptive strip below can only drop ONE field at a
-        # time — when MULTIPLE protected fields are present (the common case),
-        # the per-line retry would fail repeatedly. Cheaper + more predictable
-        # to drop them upfront here. With user_token, leave them in — OAuth
-        # bypasses the protection.
+        # 4 fields the prod base protects via Lark Automation. Writes using
+        # tenant_token return 1254062 unconditionally. With a user_access_token
+        # whose scopes include bitable:app, OAuth bypasses the lock — but if
+        # the user lacks scope, even user_token writes get 99991679 here.
         KNOWN_PROTECTED = {
             "Item for Selection", "BU with Description", "BU Detail",
             "ท่านต้องการเขียน Description เพิ่มเติมหรือไม่",
         }
-        pre_stripped: list[str] = []
-        if not user_token:
-            for k in list(lf.keys()):
-                if k in KNOWN_PROTECTED:
-                    pre_stripped.append(k)
-                    lf.pop(k)
-            if pre_stripped:
-                warnings.append({
-                    "line_index": idx,
-                    "pre_stripped_protected_fields": pre_stripped,
-                    "hint": "Not logged in via Lark OAuth — these fields are "
-                            "automation-protected on the prod base. Open this row "
-                            "in Lark Base and pick Item / BU / desc mode manually.",
-                })
+
+        def _strip_protected(target_lf: dict) -> list[str]:
+            """Drop all KNOWN_PROTECTED keys from target_lf in-place; return list."""
+            dropped = [k for k in list(target_lf.keys()) if k in KNOWN_PROTECTED]
+            for k in dropped:
+                target_lf.pop(k)
+            return dropped
+
+        # ALWAYS pre-strip the 4 protected fields. Real-world testing shows
+        # that even user_access_token from Lark OAuth fails with 1254062 on
+        # these — the user account itself doesn't have Bitable scopes (the
+        # Lark Developer Console requires admin to enable them). Until admin
+        # adds bitable:app to the app's User permissions, dropping these
+        # upfront is the only path that gets the row created at all.
+        pre_stripped = _strip_protected(lf)
+        if pre_stripped:
+            warnings.append({
+                "line_index": idx,
+                "pre_stripped_protected_fields": pre_stripped,
+                "hint": "These fields are automation-protected on the prod base "
+                        "and can't be written via API. Open this row in Lark "
+                        "Base directly and pick Item / BU / desc mode manually — "
+                        "Lark's automation will then auto-fill Item Name, BU, etc.",
+            })
 
         res = lark_request("POST", post_url, {"fields": lf}, token=token)
-        # If user_token lacks bitable scope (99991679), fall back to tenant_token
-        # for this and subsequent lines. Surface a warning so the operator knows
-        # to add the missing OAuth scopes in the Lark Developer Console.
+
+        # Fallback path: user_token returned 99991679 → switch to tenant_token.
+        # CRITICAL: must also strip the protected fields, otherwise tenant_token
+        # will immediately return 1254062 on the same fields user_token rejected.
         if (res.get("code") == 99991679 or "99991679" in (res.get("body") or "")) and fallback_token:
+            stripped_on_fallback = _strip_protected(lf)
             warnings.append({
                 "line_index": idx,
                 "fallback_to_tenant": True,
+                "pre_stripped_protected_fields": stripped_on_fallback,
                 "hint": "user_access_token lacks bitable:app / base:record:create scope. "
                         "Add these in Lark Developer Console → Permissions & Scopes, "
-                        "then logout/login again. Falling back to tenant_token (will "
-                        "strip the 4 field-protected SingleSelects).",
+                        "then logout/login again. Falling back to tenant_token + "
+                        "stripping the 4 field-protected SingleSelects.",
             })
             token = fallback_token
             fallback_token = None  # only switch once per submit
