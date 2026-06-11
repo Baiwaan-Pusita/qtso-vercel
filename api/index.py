@@ -608,6 +608,33 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
         if idx == 0 and remark_text: lf["Remark"] = remark_text
 
         post_url = f"/open-apis/bitable/v1/apps/{BASE_APP_TOKEN}/tables/{TABLES['qtso_detail']}/records"
+
+        # When using tenant_token (no OAuth user_token), pre-strip the 4 fields
+        # we know are field-protected on the prod base. Sending them yields
+        # 1254062 and the adaptive strip below can only drop ONE field at a
+        # time — when MULTIPLE protected fields are present (the common case),
+        # the per-line retry would fail repeatedly. Cheaper + more predictable
+        # to drop them upfront here. With user_token, leave them in — OAuth
+        # bypasses the protection.
+        KNOWN_PROTECTED = {
+            "Item for Selection", "BU with Description", "BU Detail",
+            "ท่านต้องการเขียน Description เพิ่มเติมหรือไม่",
+        }
+        pre_stripped: list[str] = []
+        if not user_token:
+            for k in list(lf.keys()):
+                if k in KNOWN_PROTECTED:
+                    pre_stripped.append(k)
+                    lf.pop(k)
+            if pre_stripped:
+                warnings.append({
+                    "line_index": idx,
+                    "pre_stripped_protected_fields": pre_stripped,
+                    "hint": "Not logged in via Lark OAuth — these fields are "
+                            "automation-protected on the prod base. Open this row "
+                            "in Lark Base and pick Item / BU / desc mode manually.",
+                })
+
         res = lark_request("POST", post_url, {"fields": lf}, token=token)
         # If user_token lacks bitable scope (99991679), fall back to tenant_token
         # for this and subsequent lines. Surface a warning so the operator knows
