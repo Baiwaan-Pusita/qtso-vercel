@@ -1,18 +1,6 @@
 {
-  "version": 2,
-  "builds": [
-    { "src": "api/index.py", "use": "@vercel/python" },
-    { "src": "public/**", "use": "@vercel/static" }
-  ],
-  "routes": [
-    { "src": "/api/(.*)",     "dest": "/api/index.py" },
-    { "src": "/preview/(.*)", "dest": "/api/index.py" },
-    { "src": "/",             "dest": "/public/index.html" },
-    { "src": "/(.+)",         "dest": "/public/$1" }
-  ],
-  "env": {
-    "LARK_APP_ID": "@lark_app_id",
-    "LARK_APP_SECRET": "@lark_app_secret",
-    "SESSION_SECRET": "@session_secret"
-  }
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/index" },
+    { "source": "/preview/:path*", "destination": "/api/index" }
+  ]
 }

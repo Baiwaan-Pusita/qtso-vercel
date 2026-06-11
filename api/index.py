@@ -821,10 +821,10 @@ def api_draft_render():
 
 @app.route("/", methods=["GET"])
 def index():
-    # Vercel routes "/" to public/index.html via vercel.json — but local dev
-    # (e.g. `flask run`) hits this handler. Serve the HTML from the public dir.
+    # On Vercel, index.html at repo root is auto-served — this handler only
+    # runs for local dev (python3 api/index.py).
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return send_from_directory(os.path.join(here, "public"), "index.html")
+    return send_from_directory(here, "index.html")
 
 # ─── Local dev only ──────────────────────────────────────────────────────────
 if __name__ == "__main__":
