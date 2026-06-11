@@ -777,17 +777,13 @@ def _get_qt_full(record_id: str) -> dict:
 
 @app.route("/api/qt-phase2", methods=["POST"])
 def api_qt_phase2():
+    # Lark OAuth was removed from the UI — Created by comes from the in-form
+    # user picker (open_id passed in payload). We don't use user_access_token
+    # for writes anymore; tenant_token has full Bitable scope on the app side
+    # and works for every field the prod base doesn't protect.
     payload = request.get_json(silent=True) or {}
-    sess = get_session()
-    user_token = sess.get("user_access_token") if sess else None
-    if sess:
-        payload["created_by_open_id"] = payload.get("created_by_open_id") or sess.get("open_id")
-        payload["created_by_name"] = payload.get("created_by_name") or sess.get("en_name") or sess.get("name")
     fields, skipped = _build_parent_fields(payload, scope="phase2")
-    # Pass user_token → Lark stamps the system "Created by" field with the
-    # human's avatar + name instead of the bot's. Falls back to tenant_token
-    # automatically if the user lacks bitable scope.
-    res, _ = _write_parent_with_retry(fields, token=user_token)
+    res, _ = _write_parent_with_retry(fields)
     if res.get("code") != 0:
         return jsonify({"ok": False, "step": "phase2_create", "error": res,
                         "skipped_invalid_options": skipped,
@@ -816,16 +812,12 @@ def api_qt_phase2():
 @app.route("/api/qt-phase2-update", methods=["POST"])
 def api_qt_phase2_update():
     payload = request.get_json(silent=True) or {}
-    sess = get_session()
-    user_token = sess.get("user_access_token") if sess else None
-    if sess:
-        payload["created_by_open_id"] = payload.get("created_by_open_id") or sess.get("open_id")
     rid = payload.get("record_id")
     if not rid:
         return jsonify({"ok": False, "error": "record_id required"}), 400
     fields, skipped = _build_parent_fields(payload, scope="phase2")
     fields.pop("Status", None)  # preserve existing Lark status on re-edit
-    res, _ = _write_parent_with_retry(fields, record_id=rid, method="PUT", token=user_token)
+    res, _ = _write_parent_with_retry(fields, record_id=rid, method="PUT")
     return jsonify({
         "ok": res.get("code") == 0, "record_id": rid,
         "error": res if res.get("code") != 0 else None,
@@ -835,18 +827,14 @@ def api_qt_phase2_update():
 
 @app.route("/api/qt-phase3", methods=["POST"])
 def api_qt_phase3():
+    # All writes use tenant_token now — Created by SYSTEM column shows the
+    # bot; the human-picked Created by goes into the CUSTOM 'QT Confirm
+    # Create by' field via payload.created_by_open_id (set client-side).
     payload = request.get_json(silent=True) or {}
-    sess = get_session()
-    user_token = sess.get("user_access_token") if sess else None
-    if sess:
-        payload["created_by_open_id"] = payload.get("created_by_open_id") or sess.get("open_id")
-        payload["created_by_name"] = payload.get("created_by_name") or sess.get("en_name") or sess.get("name")
-
     record_id = payload.get("record_id")
     if not record_id:
         return jsonify({"ok": False, "error": "record_id required"}), 400
 
-    # SAFETY: refuse re-submit when lines already exist (never deletes).
     existing = _count_existing_lines(record_id)
     if existing:
         return jsonify({
@@ -860,13 +848,12 @@ def api_qt_phase3():
         })
 
     all_fields, skipped = _build_parent_fields(payload, scope="all")
-    upd_res, _ = _write_parent_with_retry(all_fields, record_id=record_id, method="PUT",
-                                           token=user_token)
+    upd_res, _ = _write_parent_with_retry(all_fields, record_id=record_id, method="PUT")
     if upd_res.get("code") != 0:
         return jsonify({"ok": False, "step": "phase3_patch_parent",
                         "error": upd_res, "skipped_invalid_options": skipped})
 
-    result = _create_lines(payload, record_id, user_token=user_token)
+    result = _create_lines(payload, record_id, user_token=None)
 
     # Fetch latest Request No. for the response (1 quick GET, no polling — Vercel timeout)
     latest_request_no = ""
