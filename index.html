@@ -996,31 +996,37 @@ function setLoggedInUser(u) {
 }
 
 async function bootstrap() {
-  // Silent Lark login: if user has an active Lark session in this browser
-  // (or in the Lark desktop app), Lark's OAuth returns instantly with no UI.
-  // Cookie session is set, user shows up as "Created by" in records.
-  // If anything fails (Lark error 20029 / network), we set a 10-min cooldown
-  // so the user isn't trapped in a redirect loop — form stays usable as
-  // anonymous in the meantime.
+  // Smart auto-login: redirect to Lark OAuth ONLY if the user has previously
+  // authorized this app (localStorage flag). First-time visitors see the form
+  // with a manual "Login with Lark" button — that way they're not trapped on
+  // Lark's consent screen on their first visit. After they authorize once,
+  // future visits silent-redirect automatically (cookie expired? Lark session
+  // active? → instant silent OAuth, no UI).
   setStatus('Loading…');
   try {
     const me = await fetchJSON('/api/me');
     if (me.logged_in) {
       setLoggedInUser(me);
+      // Remember that this user has consented — so on next visit we can
+      // auto-redirect silently if the cookie expires.
+      localStorage.setItem('qtso_lark_consented', '1');
     } else {
       const params = new URLSearchParams(location.search);
       const cooldownAt = parseInt(localStorage.getItem('qtso_auth_cooldown') || '0', 10);
+      const consentedBefore = localStorage.getItem('qtso_lark_consented') === '1';
       const now = Date.now();
       if (params.has('auth_error')) {
-        // Just bounced back from Lark error — back off for 10 minutes
         localStorage.setItem('qtso_auth_cooldown', String(now + 10 * 60 * 1000));
         history.replaceState({}, '', location.pathname);
-      } else if (now > cooldownAt && !params.has('no_auto_auth')) {
-        // Silent OAuth attempt — Lark redirects us straight back if a
-        // session already exists for this user in the browser/desktop app
+      } else if (consentedBefore && now > cooldownAt && !params.has('no_auto_auth')) {
+        // Returning user — already authorized this app once. Silent redirect
+        // back to Lark; if their browser still has a Lark session, we're
+        // straight back with no UI shown.
         location.href = '/api/auth/login';
         return;
       }
+      // First-time visitor — DON'T auto-redirect. Let them see the form and
+      // click "Login with Lark" themselves. Avoids trapping them on consent.
     }
   } catch (e) {
     // ignore — keep UI usable
