@@ -676,24 +676,14 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
 
     for idx, line in enumerate(lines):
         lf: dict = {"QT&SO Management": [parent_id]}
-        # We don't send Item for Selection / BU Detail / desc_mode — those
-        # 3 fields are 'Reference options' SingleSelects on the prod base
-        # and Lark blocks API writes hard (no value/format works). User
-        # accepted that those stay empty in Lark Base.
-        #
-        # WE DO send BU with Description — also a Reference SingleSelect
-        # today, BUT we want it to "just work" the moment admin unchecks
-        # 'Reference options' on that one field in Lark UI. So we ship the
-        # value, and the strip-on-error fallback drops it if Lark still
-        # rejects (1 retry per line — same as before, no more loops).
-        if line.get("bu"):
-            bu_short = line["bu"].strip().lower()
-            bu_idx = get_field_option_index(TABLES["qtso_detail"], "BU with Description")
-            matches = [n for n in bu_idx
-                       if re.split(r"[:—\-]", n.lower(), maxsplit=1)[0].strip() == bu_short]
-            em = next((n for n in matches if "—" in n), None)
-            bu_full = em or (matches[0] if matches else None)
-            if bu_full: lf["BU with Description"] = bu_full
+        # User explicitly chose Option B: keep 'Reference options' enabled on
+        # the 4 protected SingleSelects (Item for Selection / BU with
+        # Description / BU Detail / desc_mode). Trade-off accepted: API can't
+        # write them, but admin gets dynamic option sync from Item Code.
+        # → We don't send any of those 4 fields. User fills them in Lark UI
+        #   directly after submit (10 sec/row via dropdown). All downstream
+        #   Lookups (Item Name / Item Code / BU / Department / etc.) auto-
+        #   derive once the user picks Item for Selection in Lark.
         if line.get("quantity") is not None:
             lf["Quantity"] = float(line["quantity"])
         if line.get("unit_price") is not None:
@@ -769,28 +759,15 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
         stripped: list[str] = []
         initial_snapshot = None
         if res.get("code") != 0:
-            # Strip-on-error: BU with Description is currently Reference-locked,
-            # so the first POST will fail with 1254062 if Lark hasn't been
-            # admin-unlocked yet. Drop it + ALWAYS_LOCKED auto-owned fields in
-            # one shot and retry. Once admin unchecks 'Reference options' on
-            # BU with Description, the first POST will succeed and this
-            # fallback won't trigger.
+            # We're already not sending the 4 protected fields, so any error
+            # here is from an ALWAYS_LOCKED auto-owned field (Last item /
+            # Date Working / Item (Not Used)). Drop + single retry.
             initial_snapshot = {k: v for k, v in lf.items() if k != "QT&SO Management"}
-            stage1_drop = [k for k in lf
-                           if k in ALWAYS_LOCKED or k == "BU with Description"]
+            stage1_drop = [k for k in lf if k in ALWAYS_LOCKED]
             if stage1_drop:
                 stripped.extend(stage1_drop)
                 lf = {k: v for k, v in lf.items() if k not in stage1_drop}
                 res = lark_request("POST", post_url, {"fields": lf}, token=token)
-                if "BU with Description" in stage1_drop:
-                    warnings.append({
-                        "line_index": idx,
-                        "bu_with_description_dropped": True,
-                        "hint": "BU with Description is still Reference-locked in "
-                                "Lark Base config. Ask admin to uncheck 'Reference "
-                                "options' on this field — then submits will populate "
-                                "it without any code change.",
-                    })
         if res.get("code") != 0:
             line_errors.append({
                 "index": idx, "error": res, "stripped": stripped,
