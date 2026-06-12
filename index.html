@@ -2452,8 +2452,13 @@ function buildPayload(opts) {
 
   // Each line = 1 record (user picks Month + Year directly per line — no auto-expand)
   for (const l of baseLines) {
+    // Resolve item_record_id from state.items by matching the item_selection
+    // name. This lets the backend write a TwoWayLink to the Item Code source
+    // record (bypasses Reference-locked SingleSelect blocking).
+    const it = state.items.find(x => (x.selection || x.item) === l.item_selection);
     payload.lines.push({
       ...l,
+      item_record_id: it ? it.record_id : '',
       period_type: l.period_type || 'ตาม Request',
       starting_month: l.starting_month || defaultMonth,
       working_year: l.working_year || defaultYear,

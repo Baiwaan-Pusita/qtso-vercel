@@ -209,6 +209,44 @@ def enrich_desc_input(line: dict, current_desc: str) -> str:
     return prefix
 
 
+# Item Link field detection — set once admin creates the field in Lark UI.
+# Accepts a few common naming conventions so the user can pick whatever
+# reads cleanly in the table.
+_ITEM_LINK_FIELD_CANDIDATES = ("Item Link", "ItemCode Link", "Item Code Link", "Linked Item")
+_ITEM_LINK_FIELD_NAME = None  # populated by _has_item_link_field() on first call
+_item_link_check_cache = {"checked_at": 0.0, "exists": False, "name": None}
+
+def _has_item_link_field() -> bool:
+    """Cache-aware check: does QT&SO Detail have a TwoWayLink/OneWayLink
+    field whose name matches one of _ITEM_LINK_FIELD_CANDIDATES pointing to
+    the Item Code table? Re-checks every 5 minutes so admin's UI-side add
+    is picked up without redeploy."""
+    global _ITEM_LINK_FIELD_NAME
+    now = time.time()
+    if _item_link_check_cache["checked_at"] and now - _item_link_check_cache["checked_at"] < 300:
+        _ITEM_LINK_FIELD_NAME = _item_link_check_cache["name"]
+        return _item_link_check_cache["exists"]
+    res = lark_request("GET",
+        f"/open-apis/bitable/v1/apps/{BASE_APP_TOKEN}/tables/{TABLES['qtso_detail']}/fields?page_size=200",
+        token=get_token())
+    found_name = None
+    if res.get("code") == 0:
+        for f in res["data"].get("items", []):
+            if (f.get("field_name") in _ITEM_LINK_FIELD_CANDIDATES
+                    and f.get("type") in (18, 21)):  # OneWayLink / TwoWayLink
+                # Verify the link target is Item Code table
+                prop = f.get("property") or {}
+                target = prop.get("table_id") or prop.get("target_table") or ""
+                if target == TABLES["item_code"]:
+                    found_name = f.get("field_name")
+                    break
+    _item_link_check_cache.update({
+        "checked_at": now, "exists": bool(found_name), "name": found_name,
+    })
+    _ITEM_LINK_FIELD_NAME = found_name
+    return bool(found_name)
+
+
 _field_option_cache: dict = {}
 
 def get_field_option_index(table_id: str, field_name: str) -> dict:
@@ -743,6 +781,15 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
         #     with zero code change required
         if line.get("item_selection"):
             lf["Item for Selection"] = line["item_selection"]
+            # NEW: stamp a TwoWayLink to the source Item Code record so
+            # downstream Lookups can derive through the link (bypassing the
+            # Reference-locked SingleSelect chain). Admin needs to create a
+            # field named 'Item Link' (or one of the aliases below) in the
+            # QT&SO Detail table for this to land. Until that field exists,
+            # _has_item_link_field() returns False and we skip silently.
+            irid = (line.get("item_record_id") or "").strip()
+            if irid and _has_item_link_field():
+                lf[_ITEM_LINK_FIELD_NAME] = [irid]
             # NOTE: There's a second SingleSelect column 'Item' with the
             # identical option list. Admin probably keeps them in parallel.
             # BUT direct API write to 'Item' returns 1254062 (verified via
