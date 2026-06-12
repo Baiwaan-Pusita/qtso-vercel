@@ -719,38 +719,16 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
 
         post_url = f"/open-apis/bitable/v1/apps/{BASE_APP_TOKEN}/tables/{TABLES['qtso_detail']}/records"
 
-        # 4 fields the prod base protects via Lark Automation. Writes using
-        # tenant_token return 1254062 unconditionally. With a user_access_token
-        # whose scopes include bitable:app, OAuth bypasses the lock — but if
-        # the user lacks scope, even user_token writes get 99991679 here.
-        KNOWN_PROTECTED = {
-            "Item for Selection", "BU with Description", "BU Detail",
+        # Old-code strategy (server.py before the prod-base switch): only
+        # pre-strip the 4 fields ALWAYS rejected by Lark — desc_mode,
+        # Item (Not Used), Last item, Date Working (Month) — and TRY writing
+        # Item for Selection + BU with Description directly. At one point
+        # in time those two were writable. If Lark rejects, fall back to
+        # the adaptive retry below.
+        ALWAYS_LOCKED = {
             "ท่านต้องการเขียน Description เพิ่มเติมหรือไม่",
+            "Item (Not Used)", "Last item", "Date Working (Month)",
         }
-
-        def _strip_protected(target_lf: dict) -> list[str]:
-            """Drop all KNOWN_PROTECTED keys from target_lf in-place; return list."""
-            dropped = [k for k in list(target_lf.keys()) if k in KNOWN_PROTECTED]
-            for k in dropped:
-                target_lf.pop(k)
-            return dropped
-
-        # ALWAYS pre-strip the 4 protected fields. Real-world testing shows
-        # that even user_access_token from Lark OAuth fails with 1254062 on
-        # these — the user account itself doesn't have Bitable scopes (the
-        # Lark Developer Console requires admin to enable them). Until admin
-        # adds bitable:app to the app's User permissions, dropping these
-        # upfront is the only path that gets the row created at all.
-        pre_stripped = _strip_protected(lf)
-        if pre_stripped:
-            warnings.append({
-                "line_index": idx,
-                "pre_stripped_protected_fields": pre_stripped,
-                "hint": "These fields are automation-protected on the prod base "
-                        "and can't be written via API. Open this row in Lark "
-                        "Base directly and pick Item / BU / desc mode manually — "
-                        "Lark's automation will then auto-fill Item Name, BU, etc.",
-            })
 
         res = lark_request("POST", post_url, {"fields": lf}, token=token)
 
@@ -775,31 +753,36 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
         initial_snapshot = None
         if res.get("code") != 0:
             initial_snapshot = {k: v for k, v in lf.items() if k != "QT&SO Management"}
-            # Stage 1: drop automation-owned fields
-            AUTO_OWNED = {"Item (Not Used)", "Last item", "Date Working (Month)"}
-            if any(k in lf for k in AUTO_OWNED):
-                stripped.extend([k for k in lf if k in AUTO_OWNED])
-                lf = {k: v for k, v in lf.items() if k not in AUTO_OWNED}
+            # Stage 1: drop the 4 fields that ALWAYS fail (auto-owned by
+            # Lark — Item (Not Used) / Last item / Date Working / desc_mode).
+            # If only these were the problem, the retry succeeds and we keep
+            # Item for Selection / BU with Description (which the old code
+            # successfully wrote — they may have been re-locked later, but
+            # we let Lark decide).
+            stripped.extend([k for k in lf if k in ALWAYS_LOCKED])
+            if stripped:
+                lf = {k: v for k, v in lf.items() if k not in ALWAYS_LOCKED}
                 res = lark_request("POST", post_url, {"fields": lf}, token=token)
-            # Stage 2: drop desc_mode
-            if res.get("code") != 0 and "ท่านต้องการเขียน Description เพิ่มเติมหรือไม่" in lf:
-                lf = {k: v for k, v in lf.items() if k != "ท่านต้องการเขียน Description เพิ่มเติมหรือไม่"}
-                stripped.append("ท่านต้องการเขียน Description เพิ่มเติมหรือไม่")
-                res = lark_request("POST", post_url, {"fields": lf}, token=token)
-            # Stage 3: adaptive single-strip on 1254062
+            # Stage 2: if Lark STILL rejects (e.g. Item for Selection / BU
+            # with Description got locked later), try dropping each remaining
+            # SingleSelect one at a time. Multi-strip handles the case where
+            # BOTH Item and BU are now locked.
             if res.get("code") == 1254062:
-                for candidate in [k for k in list(lf.keys()) if k in SS_FIELDS]:
-                    trial_lf = {k: v for k, v in lf.items() if k != candidate}
+                remaining = [k for k in list(lf.keys()) if k in SS_FIELDS]
+                # Try dropping ALL remaining SS fields at once (worst case)
+                if remaining:
+                    trial_lf = {k: v for k, v in lf.items() if k not in remaining}
                     trial_res = lark_request("POST", post_url, {"fields": trial_lf}, token=token)
                     if trial_res.get("code") == 0:
-                        stripped.append(candidate)
+                        stripped.extend(remaining)
                         warnings.append({
                             "line_index": idx,
-                            "ss_value_rejected": {candidate: lf.get(candidate)},
-                            "hint": "value doesn't match any option in prod base — fix mapping",
+                            "ss_dropped_to_recover": remaining,
+                            "hint": "Lark rejected these SingleSelect fields — likely "
+                                    "field-protected on prod base. Open the row in Lark "
+                                    "Base UI to pick Item / BU manually.",
                         })
                         lf, res = trial_lf, trial_res
-                        break
         if res.get("code") != 0:
             line_errors.append({
                 "index": idx, "error": res, "stripped": stripped,
