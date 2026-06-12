@@ -149,7 +149,7 @@ def get_item_info_lookup() -> dict:
     try:
         for r in fetch_all_records(TABLES["item_code"], [
             "Item for selection", "Item Code", "Item", "Item Name",
-            "BU", "BU (New)", "Department",
+            "BU", "BU (New)", "Department", "Account Code",
         ]):
             f = r.get("fields", {})
             key = text_val(f.get("Item for selection"))
@@ -159,6 +159,7 @@ def get_item_info_lookup() -> dict:
                 "item":   text_val(f.get("Item")) or text_val(f.get("Item Name")),
                 "bu":     text_val(f.get("BU (New)")) or text_val(f.get("BU")),
                 "dept":   text_val(f.get("Department")),
+                "acct":   text_val(f.get("Account Code")),
             }
     except Exception as e:
         print(f"[item-lookup] failed to build cache: {e}")
@@ -167,8 +168,15 @@ def get_item_info_lookup() -> dict:
 
 
 def enrich_desc_input(line: dict, current_desc: str) -> str:
-    """Prepend Item Code / BU / Department info to the user's Description
-    Input. If the user didn't pick an item, returns current_desc unchanged."""
+    """Prepend Item Code / Item Name / BU / Department / Account Code info to
+    the user's Description Input. Output format reads cleanly in Lark Base's
+    Description column even when Item for Selection / BU / Department lookup
+    columns (which Lark blocks API writes to) stay empty.
+
+    Format (single line, pipe-separated):
+        [AFF-001] Affiliates Commission | BU: AFF — Affiliates | Dept: 7410 | Acct: 412320
+        <user's typed description>
+    """
     item_sel = line.get("item_selection") or ""
     if not item_sel: return current_desc
     info = get_item_info_lookup().get(item_sel) or {}
@@ -179,7 +187,8 @@ def enrich_desc_input(line: dict, current_desc: str) -> str:
     extras = []
     if info.get("bu"):   extras.append(f"BU: {info['bu']}")
     if info.get("dept"): extras.append(f"Dept: {info['dept']}")
-    if extras: parts.append("(" + " | ".join(extras) + ")")
+    if info.get("acct"): extras.append(f"Acct: {info['acct']}")
+    if extras: parts.append("| " + " | ".join(extras))
     prefix = " ".join(parts).strip()
     if not prefix: return current_desc
     if current_desc:
@@ -701,10 +710,17 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
         if line.get("project_detail"): lf["Project Detail"] = line["project_detail"]
 
         # desc_mode SingleSelect is also Reference-locked — don't send.
-        # Description Input (plain text) is writable, so we still send it.
+        # Description Input (plain text) IS writable, so we use it as the
+        # 'overflow' field for everything Lark blocks us from writing
+        # structurally. Auto-prepend the picked item's metadata pulled from
+        # Item Code (read me) — Item Code / Item Name / BU / Department /
+        # Account Code — so the Description column in Lark Base shows the
+        # full picture even though Item for Selection / BU / Department
+        # lookup columns stay empty.
         user_input = (line.get("desc_input") or "").strip().strip(",").strip()
-        if user_input:
-            lf["Description Input"] = user_input
+        enriched = enrich_desc_input(line, user_input)
+        if enriched:
+            lf["Description Input"] = enriched
 
         # NOTE: Earlier we tried prepending '[CUS-002] item-name (BU: ... |
         # Dept: ...)' into Description Input as a workaround for the locked
