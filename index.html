@@ -1660,9 +1660,19 @@ function _OLD_populateCreatedBy_unused() {
 }
 
 function buList() {
-  const set = new Set();
-  state.items.forEach(it => { if (it.bu) set.add(it.bu); });
-  return Array.from(set).sort();
+  // Returns an array of {short, full} pairs — short = 'AFF', full = 'AFF — Affiliates'.
+  // The dropdown displays `full` (matches Lark's BU with Description column exactly)
+  // and the form's `line.bu` stores `short` (for filtering items + backward compat
+  // with itemsForBU()). Submit payload uses `full` so Lark gets the EXACT value
+  // it'd find in its own Item Code → BU (New) column — no mapping gap.
+  const map = new Map();
+  state.items.forEach(it => {
+    if (it.bu && !map.has(it.bu)) {
+      map.set(it.bu, it.bu_full || it.bu);
+    }
+  });
+  return Array.from(map, ([short, full]) => ({short, full}))
+              .sort((a, b) => a.short.localeCompare(b.short));
 }
 
 function itemsForBU(bu) {
@@ -1805,8 +1815,10 @@ function setLineBU(i, bu) {
 
 function renderLines() {
   const body = document.getElementById('items_body');
+  // Option value stays the short code (drives itemsForBU filter); display label
+  // is the full 'AFF — Affiliates' format — matches Lark's BU with Description.
   const buOpts = '<option value="">— BU —</option>' +
-    buList().map(b => `<option value="${escapeAttr(b)}">${escapeHtml(b)}</option>`).join('');
+    buList().map(b => `<option value="${escapeAttr(b.short)}">${escapeHtml(b.full)}</option>`).join('');
   body.innerHTML = state.lines.map((ln, i) => {
     const filtered = itemsForBU(ln.bu);
     const itemOpts = ln.bu

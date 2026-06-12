@@ -293,9 +293,14 @@ def api_customers():
 
 @app.route("/api/items", methods=["GET"])
 def api_items():
+    # Pull BU (New) too — this is the SAME column QT&SO Detail's BU with
+    # Description references. Its values look like 'AFF — Affiliates' (em-dash
+    # full label) instead of just 'AFF'. The frontend's BU dropdown uses this
+    # so what the user picks IS exactly what gets written to Lark — no
+    # mapping/transformation gap that could yield 1254062 from a stale value.
     recs = fetch_all_records(TABLES["item_code"],
                              ["Item Name", "Item", "Item Code", "Item for selection",
-                              "Document Type", "BU", "Description TH",
+                              "Document Type", "BU", "BU (New)", "Description TH",
                               "Combined Description", "Special Description", "Status",
                               "Multiple Options"])
     out = []
@@ -311,12 +316,18 @@ def api_items():
             for x in mo_raw:
                 n = x.get("name") or x.get("text") or "" if isinstance(x, dict) else str(x)
                 if n and n != "New": multiple_options.append(n)
+        # bu_full = the em-dash format ('AFF — Affiliates') used by BU with
+        # Description in QT&SO Detail. bu kept as the short code ('AFF') for
+        # backward compat with existing per-line logic + filter dropdown.
+        bu_short = text_val(f.get("BU"))
+        bu_full  = text_val(f.get("BU (New)"))
         out.append({
             "record_id": r["record_id"], "item": item,
             "item_code": text_val(f.get("Item Code")),
             "selection": text_val(f.get("Item for selection")),
             "doc_type": text_val(f.get("Document Type")),
-            "bu": text_val(f.get("BU")),
+            "bu": bu_short,
+            "bu_full": bu_full,            # ← NEW: 'AFF — Affiliates'-style label
             "desc": text_val(f.get("Description TH")),
             "combined_desc": text_val(f.get("Combined Description")),
             "special_desc": text_val(f.get("Special Description")),
