@@ -753,36 +753,30 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
         initial_snapshot = None
         if res.get("code") != 0:
             initial_snapshot = {k: v for k, v in lf.items() if k != "QT&SO Management"}
-            # Stage 1: drop the 4 fields that ALWAYS fail (auto-owned by
-            # Lark — Item (Not Used) / Last item / Date Working / desc_mode).
-            # If only these were the problem, the retry succeeds and we keep
-            # Item for Selection / BU with Description (which the old code
-            # successfully wrote — they may have been re-locked later, but
-            # we let Lark decide).
-            stripped.extend([k for k in lf if k in ALWAYS_LOCKED])
-            if stripped:
-                lf = {k: v for k, v in lf.items() if k not in ALWAYS_LOCKED}
+            # Stage 1: drop ALWAYS_LOCKED + the 4 known field-protected SingleSelects
+            # in one shot. We don't try individual drops because Lark consistently
+            # rejects the same 4 fields on every prod-base record we test, and
+            # multi-step retries blow past Vercel's function timeout. Earlier
+            # versions stripped Period Type / Starting month / Working Year too —
+            # bug, those fields ARE writable. Be surgical now: only drop the 4
+            # we've verified are blocked, and only the auto-owned fields besides.
+            KNOWN_PROTECTED = {
+                "Item for Selection", "BU with Description", "BU Detail",
+                "ท่านต้องการเขียน Description เพิ่มเติมหรือไม่",
+            }
+            to_drop = [k for k in lf if k in ALWAYS_LOCKED or k in KNOWN_PROTECTED]
+            if to_drop:
+                stripped.extend(to_drop)
+                lf = {k: v for k, v in lf.items() if k not in to_drop}
                 res = lark_request("POST", post_url, {"fields": lf}, token=token)
-            # Stage 2: if Lark STILL rejects (e.g. Item for Selection / BU
-            # with Description got locked later), try dropping each remaining
-            # SingleSelect one at a time. Multi-strip handles the case where
-            # BOTH Item and BU are now locked.
-            if res.get("code") == 1254062:
-                remaining = [k for k in list(lf.keys()) if k in SS_FIELDS]
-                # Try dropping ALL remaining SS fields at once (worst case)
-                if remaining:
-                    trial_lf = {k: v for k, v in lf.items() if k not in remaining}
-                    trial_res = lark_request("POST", post_url, {"fields": trial_lf}, token=token)
-                    if trial_res.get("code") == 0:
-                        stripped.extend(remaining)
-                        warnings.append({
-                            "line_index": idx,
-                            "ss_dropped_to_recover": remaining,
-                            "hint": "Lark rejected these SingleSelect fields — likely "
-                                    "field-protected on prod base. Open the row in Lark "
-                                    "Base UI to pick Item / BU manually.",
-                        })
-                        lf, res = trial_lf, trial_res
+                if to_drop:
+                    warnings.append({
+                        "line_index": idx,
+                        "pre_stripped_protected_fields": sorted(set(KNOWN_PROTECTED) & set(to_drop)),
+                        "hint": "These fields are field-protected on the prod base — "
+                                "Lark API returns 1254062. Open the row in Lark Base "
+                                "UI to fill Item / BU / desc mode manually.",
+                    })
         if res.get("code") != 0:
             line_errors.append({
                 "index": idx, "error": res, "stripped": stripped,
