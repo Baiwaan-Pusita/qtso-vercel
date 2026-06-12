@@ -2885,6 +2885,14 @@ async function resumeQtFromLark(recordId) {
       if (document.getElementById('prev_pane')?.classList.contains('open')) {
         document.getElementById('prev_refresh')?.click();
       }
+    } else if (r.status === 404 || (data && (data.error || data.code === 1254043))) {
+      // Stale recordId — parent was deleted/cleaned up since last session.
+      // Drop PhaseState quietly so the user starts a fresh Phase 2.
+      console.warn('[resume] parent record gone — clearing stale PhaseState');
+      PhaseState.recordId = null;
+      PhaseState.requestNo = null;
+      PhaseState.contractType = null;
+      try { localStorage.removeItem('qtso_phase_state'); } catch (_) {}
     }
   } catch (e) {
     console.warn('[resume] failed to load QT data:', e);
@@ -3263,6 +3271,31 @@ async function submitPhase3() {
       status.innerHTML = `<div style="color:#b45309;background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;line-height:1.5;">
         <b>⚠️ ไม่สามารถบันทึกซ้ำได้</b><br>${escapeHtml(res.message || '')}
       </div>`;
+      return;
+    }
+    // Stale parent record — draft in localStorage points to a QT parent that
+    // no longer exists in Lark Base. Auto-recover instead of telling the user
+    // to open DevTools: clear stale state, restart Phase 2 with same data,
+    // create a fresh parent record, then they can hit Submit again.
+    if (res.error === 'stale_parent_record' ||
+        (res.lark_response && res.lark_response.code === 1254043)) {
+      status.innerHTML = `<div style="color:#1d4ed8;background:#dbeafe;border:1px solid #93c5fd;border-radius:8px;padding:12px 14px;line-height:1.5;">
+        <b>♻️ กำลัง refresh QT parent ให้อัตโนมัติ…</b><br>
+        <small style="color:#1e40af;">เกิดจาก draft เก่าค้างอยู่ — กำลังสร้าง QT ใหม่และโหลดข้อมูลเดิมกลับให้</small>
+      </div>`;
+      // Capture current form data BEFORE clearing — we'll restore after recreating parent
+      let savedDraft = null;
+      try { savedDraft = captureDraft(); } catch (_) {}
+      // Clear stale references
+      PhaseState.recordId = null;
+      PhaseState.requestNo = null;
+      try { localStorage.removeItem('qtso_phase_state'); } catch (_) {}
+      // Restore saved form data so user doesn't lose what they typed
+      if (savedDraft) {
+        try { localStorage.setItem(DRAFT_KEY, JSON.stringify(savedDraft)); } catch (_) {}
+      }
+      // Reload — fresh bootstrap will restore the draft, user picks Confirm again
+      setTimeout(() => { window.location.reload(); }, 1500);
       return;
     }
     status.innerHTML = `<span style="color:#dc2626;">บันทึกผิดพลาด: ${escapeHtml(JSON.stringify(res.error || res.line_errors || res, null, 2))}</span>`;
