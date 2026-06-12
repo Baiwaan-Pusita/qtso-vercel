@@ -676,16 +676,15 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
 
     for idx, line in enumerate(lines):
         lf: dict = {"QT&SO Management": [parent_id]}
-        if line.get("item_selection"):
-            lf["Item for Selection"] = line["item_selection"]
-        if line.get("bu"):
-            bu_short = line["bu"].strip().lower()
-            bu_idx = get_field_option_index(TABLES["qtso_detail"], "BU with Description")
-            matches = [n for n in bu_idx
-                       if re.split(r"[:—\-]", n.lower(), maxsplit=1)[0].strip() == bu_short]
-            em = next((n for n in matches if "—" in n), None)
-            bu_full = em or (matches[0] if matches else None)
-            if bu_full: lf["BU with Description"] = bu_full
+        # NOTE: Item for Selection / BU with Description / BU Detail / desc_mode
+        # are 'Reference options' SingleSelects on the prod base. Lark blocks
+        # API writes to these regardless of value/format — verified across
+        # 30+ different write encodings. The form already shows the user
+        # what they picked (BU dropdown displays the full 'AFF — Affiliates'
+        # label that would land in the column), so we just don't attempt
+        # to send them. Saves the failed POST + retry round-trip per line.
+        # If admin unchecks 'Reference options' on a field later, re-add it
+        # to the lf dict above and writes will land.
         if line.get("quantity") is not None:
             lf["Quantity"] = float(line["quantity"])
         if line.get("unit_price") is not None:
@@ -702,12 +701,10 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
         if line.get("project_link_id"): lf["Project Link"] = [line["project_link_id"]]
         if line.get("project_detail"): lf["Project Detail"] = line["project_detail"]
 
-        desc_mode = line.get("desc_mode") or ""
+        # desc_mode SingleSelect is also Reference-locked — don't send.
+        # Description Input (plain text) is writable, so we still send it.
         user_input = (line.get("desc_input") or "").strip().strip(",").strip()
-        if desc_mode in VALID_DESC_MODES:
-            lf["ท่านต้องการเขียน Description เพิ่มเติมหรือไม่"] = desc_mode
-        if desc_mode in ("ต้องการเขียน Description ด้วยตนเอง",
-                         "ต้องการเขียน Description เพิ่มเติม") and user_input:
+        if user_input:
             lf["Description Input"] = user_input
 
         # NOTE: Earlier we tried prepending '[CUS-002] item-name (BU: ... |
@@ -763,58 +760,16 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
         stripped: list[str] = []
         initial_snapshot = None
         if res.get("code") != 0:
+            # We're not sending the 4 Reference-locked fields anymore, so any
+            # error here is unexpected. Try dropping ALWAYS_LOCKED (auto-owned)
+            # fields once — usually 'Last item' or 'Date Working (Month)' that
+            # Lark automation owns — and report whatever's left.
             initial_snapshot = {k: v for k, v in lf.items() if k != "QT&SO Management"}
-            # Lark's "Reference options" feature on QT&SO Detail makes 4 SingleSelects
-            # API-write-blocked. The fields fall into two tiers:
-            #
-            #   TIER A — keep trying (user-requested "source" field):
-            #     • BU with Description — drives the BU lookup chain. If admin
-            #       unchecks "Reference options" on this field, it becomes writable
-            #       and BU lookup auto-derives.
-            #
-            #   TIER B — always drop (deeper Reference SingleSelects, locked even
-            #     if admin unlocks BU with Description). Cascading lookups
-            #     (Item Name, Item Code, Business Model, Department, etc.) will
-            #     still auto-derive once BU with Description is set.
-            #     • Item for Selection
-            #     • BU Detail
-            #     • ท่านต้องการเขียน Description เพิ่มเติมหรือไม่
-            TIER_B = {
-                "Item for Selection", "BU Detail",
-                "ท่านต้องการเขียน Description เพิ่มเติมหรือไม่",
-            }
-            # Stage 1: drop ALWAYS_LOCKED + TIER_B in one shot, keep BU with Description.
-            stage1_drop = [k for k in lf if k in ALWAYS_LOCKED or k in TIER_B]
+            stage1_drop = [k for k in lf if k in ALWAYS_LOCKED]
             if stage1_drop:
                 stripped.extend(stage1_drop)
                 lf = {k: v for k, v in lf.items() if k not in stage1_drop}
                 res = lark_request("POST", post_url, {"fields": lf}, token=token)
-            # Stage 2: if STILL failing (admin hasn't unchecked Reference options on
-            # BU with Description yet), drop it too as a last resort so the row
-            # at least gets created with everything else.
-            if res.get("code") == 1254062 and "BU with Description" in lf:
-                stripped.append("BU with Description")
-                lf = {k: v for k, v in lf.items() if k != "BU with Description"}
-                res = lark_request("POST", post_url, {"fields": lf}, token=token)
-                warnings.append({
-                    "line_index": idx,
-                    "bu_with_description_dropped": True,
-                    "hint": "BU with Description is still Reference-locked. Ask admin "
-                            "to uncheck 'Reference options' in its field config — "
-                            "then BU lookup will auto-derive from this column.",
-                })
-            elif stage1_drop:
-                # Stage 1 succeeded — note what we kept vs dropped
-                kept_bu = "BU with Description" in lf
-                warnings.append({
-                    "line_index": idx,
-                    "stripped_fields": sorted(set(TIER_B) & set(stage1_drop)),
-                    "bu_with_description_written": kept_bu,
-                    "hint": "Lookups for Item Name / Item Code / Business Model / "
-                            "Department / etc. auto-derive from BU with Description "
-                            "+ Item for Selection. Without Item for Selection (locked), "
-                            "most cascade values stay empty.",
-                })
         if res.get("code") != 0:
             line_errors.append({
                 "index": idx, "error": res, "stripped": stripped,
