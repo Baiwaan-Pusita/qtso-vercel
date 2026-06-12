@@ -954,7 +954,12 @@ def api_qt_phase3():
         return jsonify({"ok": False, "step": "phase3_patch_parent",
                         "error": upd_res, "skipped_invalid_options": skipped})
 
-    result = _create_lines(payload, record_id, user_token=None)
+    # Use the logged-in user's Lark OAuth token if they have a session — user_token
+    # may bypass field-level protections that tenant_token can't touch. Falls back
+    # to tenant_token inside _create_lines if user_token lacks bitable scope.
+    sess = get_session()
+    user_tok = sess.get("user_access_token") if sess else None
+    result = _create_lines(payload, record_id, user_token=user_tok)
 
     # Fetch latest Request No. for the response (1 quick GET, no polling — Vercel timeout)
     latest_request_no = ""

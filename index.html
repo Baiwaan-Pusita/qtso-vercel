@@ -492,21 +492,6 @@ body.preview-open header {
       </div>
     </div>
 
-    <!-- Helper banner — 4 fields Lark blocks need manual fill in Lark UI -->
-    <div style="background:#fef3c7; border:1px solid #fcd34d; border-radius:var(--radius); padding:16px 20px; margin-bottom:20px; text-align:left;">
-      <div style="font-weight:700; color:#92400e; margin-bottom:6px; font-size:14px;">
-        📝 ขั้นถัดไป — ไปเติม 4 fields ใน Lark Base
-      </div>
-      <div style="font-size:12px; color:#78350f; line-height:1.6; margin-bottom:10px;">
-        Fields ที่ Lark ล็อกผ่าน API (Reference options):
-        Item for Selection, BU with Description, BU Detail, ท่านต้องการเขียน Description
-        — กรอกใน Lark โดยคลิกที่ dropdown ของแต่ละ row → cascade Lookups (Item Name / BU / Department / Item Code / etc.) จะ fill อัตโนมัติ
-      </div>
-      <a id="done_lark_link" href="https://p42u8dv87zi.sg.larksuite.com/wiki/DxaywzCmjiDhb2kKU5hl5QOwgLd?table=tbl01rn7UYG0Gl7w" target="_blank" rel="noopener" style="display:inline-block; background:#d97706; color:white; padding:8px 18px; border-radius:8px; text-decoration:none; font-weight:700; font-size:13px;">
-        เปิด QT&SO Detail ใน Lark Base ↗
-      </a>
-    </div>
-
     <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
       <button type="button" onclick="openQtViewer()" class="btn-primary" style="padding:14px 28px; font-size:14px; border-radius:var(--radius);">
         📄 ดู QT/SO Preview
@@ -1029,19 +1014,42 @@ async function tryLarkSdkLogin() {
 }
 
 async function bootstrap() {
-  // No Lark OAuth — Created by is set by an in-form user picker
-  // (populated from /api/all-employees, persisted in localStorage).
-  // We still GET /api/me in case a session exists from earlier; if it does,
-  // we use it as a hint. But the picker is the primary path.
+  // Lark OAuth login — first visit: auto-redirect so the backend gets a
+  // user_access_token. The token MAY bypass Reference-locked SingleSelect
+  // fields that tenant_token can't touch (per user's request: "ถ้าต้องการ
+  // ล็อกอิน lark ก่อนก็ทำจะได้ authen ได้"). Adaptive Stage 3 strip still
+  // protects the submit if user_token also gets blocked.
   setStatus('Loading…');
-  // No-op login check kept for compatibility — if there happens to be a
-  // pre-existing session cookie from earlier Lark OAuth flows, surface it
-  // as the picked user. Otherwise the in-form picker takes over.
+  let isLoggedIn = false;
   try {
     const me = await fetchJSON('/api/me');
-    if (me.logged_in) setLoggedInUser(me);
+    if (me.logged_in) {
+      isLoggedIn = true;
+      setLoggedInUser(me);
+    }
   } catch (e) {
-    // ignore — keep UI usable
+    // ignore — keep UI usable even if /api/me errors
+  }
+  // Auto-redirect to Lark OAuth on first visit when not logged in.
+  // Cooldown via localStorage: if OAuth fails (Lark misconfig, popup-blocked,
+  // user cancels), we wait 5 min before trying again so the app stays usable.
+  if (!isLoggedIn) {
+    const COOLDOWN_KEY = 'lark_oauth_cooldown';
+    const COOLDOWN_MS = 5 * 60 * 1000;
+    const last = parseInt(localStorage.getItem(COOLDOWN_KEY) || '0', 10);
+    const now = Date.now();
+    if (now - last > COOLDOWN_MS) {
+      localStorage.setItem(COOLDOWN_KEY, String(now));
+      // Send them to Lark for login. Backend redirects back here once done.
+      window.location.href = '/api/auth/login';
+      return;  // halt bootstrap; the page will reload after callback
+    }
+    // Within cooldown — let user keep working unauthenticated; the in-form
+    // picker still works. Show a subtle banner with manual login option.
+    const banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed; top:0; left:0; right:0; background:#fef3c7; border-bottom:1px solid #fcd34d; padding:10px 16px; text-align:center; font-size:13px; color:#92400e; z-index:9998;';
+    banner.innerHTML = 'ยังไม่ได้ล็อกอิน Lark (อาจช่วยปลด field lock บางตัว) — <a href="/api/auth/login" style="color:#7c2d12; font-weight:700;">เข้าสู่ระบบ</a>';
+    document.body.appendChild(banner);
   }
   setStatus('Loading from Lark Base…');
   try {
