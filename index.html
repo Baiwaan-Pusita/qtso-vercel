@@ -4,12 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>QT/SO Generator — Ripples Commerce</title>
-<!-- Lark Web JS SDK — when this page is embedded inside Lark Suite as a
-     mini-app or iframe page, Lark injects `window.tt` (or `h5sdk`). We use
-     requestAuthCode() to grab an auth code with NO user-visible prompt —
-     the user is already authenticated in Lark Suite. Falls back to the
-     standard OAuth redirect button when accessed outside Lark Suite. -->
-<script src="https://lf3-static.bytednsdoc.com/obj/eden-cn/eh7nuhpEh7nupd/lark-js-sdk/h5-js-sdk-1.5.42/lark.js"></script>
+<!-- Lark Web JS SDK was here to enable silent OAuth when embedded as a
+     Lark mini-app. We replaced OAuth with an in-form user picker, so the
+     SDK is no longer needed. The previous CDN URL was 404ing anyway. -->
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -642,30 +639,12 @@ body.preview-open header {
       </div>
     </div>
 
-    <div style="margin-top: 14px;">
-      <label class="req">Created by (ผู้กรอกฟอร์ม)</label>
-      <!-- Searchable user picker — replaces Lark OAuth login. Pulls the full
-           Lark Employee directory via /api/all-employees, lets the user pick
-           themselves (or whoever's filling the form on their behalf), and
-           sticks the choice in localStorage so they don't have to re-pick
-           on every visit. -->
-      <div style="position:relative;">
-        <input id="created_by_picker" autocomplete="off"
-               placeholder="พิมพ์ชื่อผู้กรอกฟอร์ม… (เลือกจากรายชื่อพนักงาน)"
-               style="width:100%;" />
-        <div id="created_by_picker_dropdown" class="custom-dropdown"></div>
-      </div>
-      <div id="created_by_display" style="display:none; margin-top:10px; align-items:center; gap:10px; padding:10px 12px; background:var(--primary-gradient-soft); border:1px solid #dee3f5; border-radius:var(--radius-sm);">
-        <span id="cb_avatar"></span>
-        <div style="flex:1;">
-          <div id="cb_name" style="font-weight:600; color:var(--text);">—</div>
-          <div id="cb_meta" style="font-size:11px; color:var(--muted);"></div>
-        </div>
-        <button type="button" id="btn_logout" style="background:white; color:var(--danger); border:1px solid #fca5a5; padding:5px 12px; border-radius:var(--radius-sm); font-size:11px; cursor:pointer; font-weight:600;">เปลี่ยน</button>
-      </div>
-      <input type="hidden" id="created_by_open_id">
-      <input type="hidden" id="created_by">
-    </div>
+    <!-- Created by card removed — user identity flows from Operation Hub login
+         (the user is expected to be already authenticated there before
+         opening this form). The hidden inputs stay so existing buildPayload()
+         / submit logic don't break — they just stay empty. -->
+    <input type="hidden" id="created_by_open_id">
+    <input type="hidden" id="created_by">
 
     <div class="grid grid-2" style="margin-top: 14px;">
       <div>
@@ -981,26 +960,13 @@ function disableAutocomplete() {
 window.addEventListener('DOMContentLoaded', disableAutocomplete);
 
 function setLoggedInUser(u) {
+  // Created by card removed — only sync hidden inputs so submit payloads
+  // pick up whatever identity is available (typically empty now).
   state.currentUser = u;
-  document.getElementById('created_by').value = u.en_name || u.name || '';
-  document.getElementById('created_by_open_id').value = u.open_id || '';
-  document.getElementById('cb_name').textContent = u.en_name || u.name || '—';
-  document.getElementById('cb_meta').textContent = u.open_id
-    ? `open_id: ${String(u.open_id).slice(0, 20)}…`
-    : '';
-  document.getElementById('cb_meta').style.color = 'var(--muted)';
-  // Hide the picker input, show the selected-user card
-  const pickerInp = document.getElementById('created_by_picker');
-  const card = document.getElementById('created_by_display');
-  if (pickerInp) pickerInp.parentElement.style.display = 'none';
-  if (card) card.style.display = 'flex';
-  const av = document.getElementById('cb_avatar');
-  if (u.avatar_url) {
-    av.innerHTML = `<img src="${escapeAttr(u.avatar_url)}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;" alt="">`;
-  } else {
-    const initial = (u.en_name || u.name || '?')[0].toUpperCase();
-    av.innerHTML = `<span style="display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#2b5cf2,#6c4cf3);color:white;font-weight:700;">${escapeHtml(initial)}</span>`;
-  }
+  const cb = document.getElementById('created_by');
+  const oid = document.getElementById('created_by_open_id');
+  if (cb)  cb.value  = u.en_name || u.name || '';
+  if (oid) oid.value = u.open_id || '';
 }
 
 function clearCreatedBy() {
@@ -1591,8 +1557,10 @@ function renderCreatedByCard(e) {
 }
 
 function populateCreatedBy() {
-  // Searchable picker. No Lark OAuth — just pick yourself from the directory.
-  // Choice persists in localStorage so you don't re-pick on every visit.
+  // Created by card was removed — user identity comes from Operation Hub
+  // login upstream. Skip everything here; the picker DOM doesn't exist.
+  return;
+  // ── legacy picker code retained below for reference ──
   const inp = document.getElementById('created_by_picker');
   const dd  = document.getElementById('created_by_picker_dropdown');
   const card = document.getElementById('created_by_display');
