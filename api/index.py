@@ -753,30 +753,57 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
         initial_snapshot = None
         if res.get("code") != 0:
             initial_snapshot = {k: v for k, v in lf.items() if k != "QT&SO Management"}
-            # Stage 1: drop ALWAYS_LOCKED + the 4 known field-protected SingleSelects
-            # in one shot. We don't try individual drops because Lark consistently
-            # rejects the same 4 fields on every prod-base record we test, and
-            # multi-step retries blow past Vercel's function timeout. Earlier
-            # versions stripped Period Type / Starting month / Working Year too —
-            # bug, those fields ARE writable. Be surgical now: only drop the 4
-            # we've verified are blocked, and only the auto-owned fields besides.
-            KNOWN_PROTECTED = {
-                "Item for Selection", "BU with Description", "BU Detail",
+            # Lark's "Reference options" feature on QT&SO Detail makes 4 SingleSelects
+            # API-write-blocked. The fields fall into two tiers:
+            #
+            #   TIER A — keep trying (user-requested "source" field):
+            #     • BU with Description — drives the BU lookup chain. If admin
+            #       unchecks "Reference options" on this field, it becomes writable
+            #       and BU lookup auto-derives.
+            #
+            #   TIER B — always drop (deeper Reference SingleSelects, locked even
+            #     if admin unlocks BU with Description). Cascading lookups
+            #     (Item Name, Item Code, Business Model, Department, etc.) will
+            #     still auto-derive once BU with Description is set.
+            #     • Item for Selection
+            #     • BU Detail
+            #     • ท่านต้องการเขียน Description เพิ่มเติมหรือไม่
+            TIER_B = {
+                "Item for Selection", "BU Detail",
                 "ท่านต้องการเขียน Description เพิ่มเติมหรือไม่",
             }
-            to_drop = [k for k in lf if k in ALWAYS_LOCKED or k in KNOWN_PROTECTED]
-            if to_drop:
-                stripped.extend(to_drop)
-                lf = {k: v for k, v in lf.items() if k not in to_drop}
+            # Stage 1: drop ALWAYS_LOCKED + TIER_B in one shot, keep BU with Description.
+            stage1_drop = [k for k in lf if k in ALWAYS_LOCKED or k in TIER_B]
+            if stage1_drop:
+                stripped.extend(stage1_drop)
+                lf = {k: v for k, v in lf.items() if k not in stage1_drop}
                 res = lark_request("POST", post_url, {"fields": lf}, token=token)
-                if to_drop:
-                    warnings.append({
-                        "line_index": idx,
-                        "pre_stripped_protected_fields": sorted(set(KNOWN_PROTECTED) & set(to_drop)),
-                        "hint": "These fields are field-protected on the prod base — "
-                                "Lark API returns 1254062. Open the row in Lark Base "
-                                "UI to fill Item / BU / desc mode manually.",
-                    })
+            # Stage 2: if STILL failing (admin hasn't unchecked Reference options on
+            # BU with Description yet), drop it too as a last resort so the row
+            # at least gets created with everything else.
+            if res.get("code") == 1254062 and "BU with Description" in lf:
+                stripped.append("BU with Description")
+                lf = {k: v for k, v in lf.items() if k != "BU with Description"}
+                res = lark_request("POST", post_url, {"fields": lf}, token=token)
+                warnings.append({
+                    "line_index": idx,
+                    "bu_with_description_dropped": True,
+                    "hint": "BU with Description is still Reference-locked. Ask admin "
+                            "to uncheck 'Reference options' in its field config — "
+                            "then BU lookup will auto-derive from this column.",
+                })
+            elif stage1_drop:
+                # Stage 1 succeeded — note what we kept vs dropped
+                kept_bu = "BU with Description" in lf
+                warnings.append({
+                    "line_index": idx,
+                    "stripped_fields": sorted(set(TIER_B) & set(stage1_drop)),
+                    "bu_with_description_written": kept_bu,
+                    "hint": "Lookups for Item Name / Item Code / Business Model / "
+                            "Department / etc. auto-derive from BU with Description "
+                            "+ Item for Selection. Without Item for Selection (locked), "
+                            "most cascade values stay empty.",
+                })
         if res.get("code") != 0:
             line_errors.append({
                 "index": idx, "error": res, "stripped": stripped,
