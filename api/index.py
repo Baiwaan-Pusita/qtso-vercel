@@ -730,10 +730,14 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
         #     with zero code change required
         if line.get("item_selection"):
             lf["Item for Selection"] = line["item_selection"]
-            # 'Item' is a clone SingleSelect with the exact same option list
-            # as 'Item for Selection' — admin keeps both columns in sync.
-            # Write the same value so it doesn't stay empty.
-            lf["Item"] = line["item_selection"]
+            # NOTE: There's a second SingleSelect column 'Item' with the
+            # identical option list. Admin probably keeps them in parallel.
+            # BUT direct API write to 'Item' returns 1254062 (verified via
+            # isolated PUT test with tenant_token — even with no other
+            # fields in the payload). 'Item' is Reference-locked at the
+            # Lark Base level just like Item for Selection used to be.
+            # If admin unchecks 'Reference options' on Item too, we can
+            # re-enable the parallel write here.
         if line.get("bu"):
             bu_short = line["bu"].strip().lower()
             bu_idx = get_field_option_index(TABLES["qtso_detail"], "BU with Description")
