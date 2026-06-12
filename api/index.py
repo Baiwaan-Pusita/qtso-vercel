@@ -785,12 +785,21 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
         #   • When admin unlocks more later → those auto-start populating
         #     with zero code change required
         if line.get("item_selection"):
+            # PRIMARY: Item for Selection (Reference + conditions ON in prod →
+            # API write blocked by Lark with 1254062). Send anyway — when admin
+            # has Reference OFF (test base) or when in any base with no filter
+            # conditions, this lands successfully. Stage 3 strip drops it
+            # otherwise. NO HARM in trying.
             lf["Item for Selection"] = line["item_selection"]
+            # BUFFER: _pending_item_selection is a plain Text field (no
+            # Reference, no conditions) → always writable via API. A Lark
+            # Automation rule in the base copies this into Item for Selection
+            # via Lark's internal write engine, which bypasses the
+            # Reference+conditions API restriction. Result: Item for Selection
+            # populates even when conditions are kept ON.
+            lf["_pending_item_selection"] = line["item_selection"]
             # Vercel ALSO keeps item_record_id internally (frontend resolves
-            # it from state.items by matching item_selection name). We don't
-            # write it to Lark Base — keeps Lark schema untouched. record_id
-            # is used by Vercel for QT/SO preview, audit logging, and to
-            # cross-reference fresh Item Code data via get_item_by_record_id().
+            # it from state.items by matching item_selection name).
             irid = (line.get("item_record_id") or "").strip()
             if irid:
                 print(f"[create-line] idx={idx} item_record_id={irid} "
