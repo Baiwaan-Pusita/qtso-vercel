@@ -742,13 +742,27 @@ def _count_existing_lines(parent_id: str) -> list[str]:
 
 
 def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) -> dict:
-    """Create QT&SO Detail lines. Strategy:
-      1) If user_token is supplied, try it FIRST (bypasses field-level protection
-         on the 4 locked SingleSelects).
-      2) If user_token returns 99991679 ("user lacks bitable scope"), automatically
-         fall back to tenant_token — the strip will drop the 4 protected fields
-         but at least the row gets created with the rest.
-    Adaptive strip on 1254062 — drops one SS field at a time to find the culprit."""
+    """⭐ WORKING — last verified commit ab51ce6 (2026-06-12).
+
+    Create QT&SO Detail lines. Bridge architecture:
+      Writes BOTH 'Item for Selection' (canonical SingleSelect; may fail with
+      1254062 if Reference+conditions ON) AND '_pending_item_selection' (text
+      buffer that's always writable). Lark Base's '_effective_item_selection'
+      Formula picks whichever is populated, and downstream Lookups (Item Name,
+      Item Code, BU, Department, Account Code, Business Model, Business Model
+      Type) derive through the formula → all populate regardless of which
+      path was used.
+
+    Strategy on auth:
+      1) If user_token is supplied, try it FIRST.
+      2) If user_token returns 99991677/99991679/HTTP 401, fall back to
+         tenant_token. Adaptive Stage 3 strip handles any per-field rejections.
+
+    Stages on retry (1254062 SingleSelectFieldConvFail):
+      Stage 1: drop ALWAYS_LOCKED fields (desc_mode + Item (Not Used))
+      Stage 2: drop desc_mode if still in payload
+      Stage 3 (adaptive): drop each remaining SingleSelect one at a time.
+    """
     primary_token = user_token or get_token()
     fallback_token = get_token() if user_token else None
     token = primary_token
