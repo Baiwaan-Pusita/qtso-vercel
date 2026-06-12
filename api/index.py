@@ -132,6 +132,61 @@ def text_val(v: Any) -> str:
         return v.get("text") or v.get("en_name") or v.get("name") or ""
     return ""
 
+_item_info_cache: dict | None = None
+
+def get_item_info_lookup() -> dict:
+    """Build a {item_for_selection_label: item_info_dict} map from the Item
+    Code table. Used to enrich Description Input with Item Code / BU /
+    Department text whenever the user picks an item in the form — since the
+    prod base locks the Item for Selection / BU / Department SingleSelects
+    and we can't write them via API, this is how we surface the picked
+    item's metadata in Lark Base in a way that's still searchable + visible
+    (Description formula reflects Description Input)."""
+    global _item_info_cache
+    if _item_info_cache is not None:
+        return _item_info_cache
+    lookup: dict = {}
+    try:
+        for r in fetch_all_records(TABLES["item_code"], [
+            "Item for selection", "Item Code", "Item", "Item Name",
+            "BU", "BU (New)", "Department",
+        ]):
+            f = r.get("fields", {})
+            key = text_val(f.get("Item for selection"))
+            if not key: continue
+            lookup[key] = {
+                "code":   text_val(f.get("Item Code")),
+                "item":   text_val(f.get("Item")) or text_val(f.get("Item Name")),
+                "bu":     text_val(f.get("BU (New)")) or text_val(f.get("BU")),
+                "dept":   text_val(f.get("Department")),
+            }
+    except Exception as e:
+        print(f"[item-lookup] failed to build cache: {e}")
+    _item_info_cache = lookup
+    return lookup
+
+
+def enrich_desc_input(line: dict, current_desc: str) -> str:
+    """Prepend Item Code / BU / Department info to the user's Description
+    Input. If the user didn't pick an item, returns current_desc unchanged."""
+    item_sel = line.get("item_selection") or ""
+    if not item_sel: return current_desc
+    info = get_item_info_lookup().get(item_sel) or {}
+    if not info: return current_desc
+    parts = []
+    if info.get("code"): parts.append(f"[{info['code']}]")
+    if info.get("item"): parts.append(info["item"])
+    extras = []
+    if info.get("bu"):   extras.append(f"BU: {info['bu']}")
+    if info.get("dept"): extras.append(f"Dept: {info['dept']}")
+    if extras: parts.append("(" + " | ".join(extras) + ")")
+    prefix = " ".join(parts).strip()
+    if not prefix: return current_desc
+    if current_desc:
+        return f"{prefix}\n{current_desc}"
+    return prefix
+
+
 _field_option_cache: dict = {}
 
 def get_field_option_index(table_id: str, field_name: str) -> dict:
@@ -643,6 +698,16 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
         if desc_mode in ("ต้องการเขียน Description ด้วยตนเอง",
                          "ต้องการเขียน Description เพิ่มเติม") and user_input:
             lf["Description Input"] = user_input
+
+        # Enrich Description Input with Item Code / BU / Department pulled
+        # from the Item Code table — the prod base locks the structured
+        # SingleSelects for Item / BU / Department so we can't write them
+        # directly, but we CAN write Description Input. Lark's Description
+        # formula reflects this so the row stays searchable + readable.
+        existing_desc = lf.get("Description Input", "")
+        enriched = enrich_desc_input(line, existing_desc)
+        if enriched:
+            lf["Description Input"] = enriched
 
         sm, wy = line.get("starting_month"), line.get("working_year")
         if sm in MONTH_NUM and wy:
