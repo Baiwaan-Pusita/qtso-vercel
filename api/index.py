@@ -32,31 +32,31 @@ APP_ID = os.environ.get("LARK_APP_ID", "cli_aa9fd13c9b799eef")
 APP_SECRET = os.environ.get("LARK_APP_SECRET", "qaRpTqTt8euDmkpRFJM5QemA3FbBswjr")
 SESSION_SECRET = os.environ.get("SESSION_SECRET", "dev-only-change-me-in-vercel")
 
-## Switched back to TEST base (wiki UL6KwpQ2oiEWOCkqn8pluCEZgIf) per user
-## request — safer for iterating on field-level fixes without touching prod
-## data. Production base IDs preserved in comments below for quick rollback.
+## Switched back to PROD base per user request — testing the record_id
+## flow + adaptive strip resilience against the real Reference-locked
+## fields. Test base IDs preserved in comments below for quick rollback.
 ##
-## Production base (paused):
-##   BASE_APP_TOKEN = "HZwsbAdIHabtqXspWLDlNryUg1e"
-##   qt_mgmt        = "tbllrHviruBy5ltH"
-##   qtso_detail    = "tbl01rn7UYG0Gl7w"
-##   brands_company = "tblB5r3geCkdI8YH"
-##   customer       = "tblnpZe52qwky9U2"
-##   item_code      = "tblUTOBmBulfRriq"
-##   employee       = "tbl2ReQCQvCc7rg1"
-##   project        = "tbl7Vd0aRxXXCx1l"
-BASE_APP_TOKEN = "Gr9jbWRZFa9zQVsn1jflt0zWgaf"  # TEST base
+## Test base (paused):
+##   BASE_APP_TOKEN = "Gr9jbWRZFa9zQVsn1jflt0zWgaf"
+##   qt_mgmt        = "tblwxmRty8lfo31m"
+##   qtso_detail    = "tblYofJYQSxJGkaF"
+##   brands_company = "tblZ7Eszq9aQV8ab"
+##   customer       = "tblJZQW0zdG2buhF"
+##   item_code      = "tblWV3aGS52fZp8P"
+##   employee       = "tble8RRCdlvCBBdU"
+##   project        = "tblCMlP2zPG2PaCy"
+BASE_APP_TOKEN = "HZwsbAdIHabtqXspWLDlNryUg1e"  # PROD base
 LARK_HOST = "https://open.larksuite.com"
 LARK_AUTH_HOST = "https://accounts.larksuite.com"
 
 TABLES = {
-    "qt_mgmt":        "tblwxmRty8lfo31m",
-    "qtso_detail":    "tblYofJYQSxJGkaF",
-    "brands_company": "tblZ7Eszq9aQV8ab",
-    "customer":       "tblJZQW0zdG2buhF",
-    "item_code":      "tblWV3aGS52fZp8P",
-    "employee":       "tble8RRCdlvCBBdU",
-    "project":        "tblCMlP2zPG2PaCy",
+    "qt_mgmt":        "tbllrHviruBy5ltH",
+    "qtso_detail":    "tbl01rn7UYG0Gl7w",
+    "brands_company": "tblB5r3geCkdI8YH",
+    "customer":       "tblnpZe52qwky9U2",
+    "item_code":      "tblUTOBmBulfRriq",
+    "employee":       "tbl2ReQCQvCc7rg1",
+    "project":        "tbl7Vd0aRxXXCx1l",
 }
 
 def _redirect_url() -> str:
