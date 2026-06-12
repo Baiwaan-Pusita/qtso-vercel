@@ -685,14 +685,23 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
 
     for idx, line in enumerate(lines):
         lf: dict = {"QT&SO Management": [parent_id]}
-        # User explicitly chose Option B: keep 'Reference options' enabled on
-        # the 4 protected SingleSelects (Item for Selection / BU with
-        # Description / BU Detail / desc_mode). Trade-off accepted: API can't
-        # write them, but admin gets dynamic option sync from Item Code.
-        # → We don't send any of those 4 fields. User fills them in Lark UI
-        #   directly after submit (10 sec/row via dropdown). All downstream
-        #   Lookups (Item Name / Item Code / BU / Department / etc.) auto-
-        #   derive once the user picks Item for Selection in Lark.
+        # As of 2026-06-12 admin unlocked BU with Description (Reference
+        # options unchecked in Lark UI) — Lark now accepts API writes to it.
+        # The other 3 fields (Item for Selection / BU Detail / desc_mode)
+        # are still Reference-locked. Strategy:
+        #   • SEND BU with Description (Lark accepts now → BU column fills
+        #     + BU lookup chain derives Item Code's BU column automatically)
+        #   • DON'T send the other 3 — they still 1254062
+        # Strip-on-error fallback below drops BU with Description if Lark
+        # ever re-enables Reference options, keeping the submit working.
+        if line.get("bu"):
+            bu_short = line["bu"].strip().lower()
+            bu_idx = get_field_option_index(TABLES["qtso_detail"], "BU with Description")
+            matches = [n for n in bu_idx
+                       if re.split(r"[:—\-]", n.lower(), maxsplit=1)[0].strip() == bu_short]
+            em = next((n for n in matches if "—" in n), None)
+            bu_full = em or (matches[0] if matches else None)
+            if bu_full: lf["BU with Description"] = bu_full
         if line.get("quantity") is not None:
             lf["Quantity"] = float(line["quantity"])
         if line.get("unit_price") is not None:
@@ -775,15 +784,25 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
         stripped: list[str] = []
         initial_snapshot = None
         if res.get("code") != 0:
-            # We're already not sending the 4 protected fields, so any error
-            # here is from an ALWAYS_LOCKED auto-owned field (Last item /
-            # Date Working / Item (Not Used)). Drop + single retry.
+            # Strip-on-error: drop ALWAYS_LOCKED + BU with Description in one
+            # shot, then retry. If admin ever re-enables Reference options on
+            # BU with Description, this keeps submits working — BU column
+            # would just stay empty for that submit.
             initial_snapshot = {k: v for k, v in lf.items() if k != "QT&SO Management"}
-            stage1_drop = [k for k in lf if k in ALWAYS_LOCKED]
+            stage1_drop = [k for k in lf
+                           if k in ALWAYS_LOCKED or k == "BU with Description"]
             if stage1_drop:
                 stripped.extend(stage1_drop)
                 lf = {k: v for k, v in lf.items() if k not in stage1_drop}
                 res = lark_request("POST", post_url, {"fields": lf}, token=token)
+                if "BU with Description" in stage1_drop:
+                    warnings.append({
+                        "line_index": idx,
+                        "bu_dropped_unexpectedly": True,
+                        "hint": "BU with Description was accepted in our last test "
+                                "but Lark just rejected it. Admin may have re-checked "
+                                "'Reference options'. Submit succeeded with BU column empty.",
+                    })
         if res.get("code") != 0:
             line_errors.append({
                 "index": idx, "error": res, "stripped": stripped,
