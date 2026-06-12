@@ -710,8 +710,9 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
         "ไม่ต้องการเขียน Description เพิ่มเติม",
     }
     SS_FIELDS = {
-        "Item for Selection", "BU with Description", "เหตุผลที่ AM Outsource",
-        "Period Type", "Starting month", "Working Year", "เก็บเงินได้เลยไหม",
+        "Item for Selection", "Item", "BU with Description", "BU Detail",
+        "เหตุผลที่ AM Outsource", "Period Type", "Starting month",
+        "Working Year", "เก็บเงินได้เลยไหม",
         "ท่านต้องการเขียน Description เพิ่มเติมหรือไม่",
     }
     lines = payload.get("lines", []) or []
@@ -729,6 +730,10 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
         #     with zero code change required
         if line.get("item_selection"):
             lf["Item for Selection"] = line["item_selection"]
+            # 'Item' is a clone SingleSelect with the exact same option list
+            # as 'Item for Selection' — admin keeps both columns in sync.
+            # Write the same value so it doesn't stay empty.
+            lf["Item"] = line["item_selection"]
         if line.get("bu"):
             bu_short = line["bu"].strip().lower()
             bu_idx = get_field_option_index(TABLES["qtso_detail"], "BU with Description")
