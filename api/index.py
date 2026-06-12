@@ -728,21 +728,17 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
                           "ต้องการเขียน Description เพิ่มเติม",
                           "ไม่ต้องการเขียน Description เพิ่มเติม"}:
             lf["ท่านต้องการเขียน Description เพิ่มเติมหรือไม่"] = desc_mode
-        # Description Input — user typed text, prepend item metadata from
-        # Item Code source so the Description column reads complete even
-        # when Reference lookups stay empty.
+        # Description Input — user's typed text ONLY. No more prepending
+        # of "[CODE] Name | BU: ... | Dept: ..." metadata. User feedback:
+        # "อันนี้ควรกระจายไปใส่ให้ถูกช่อง" — item metadata belongs in its
+        # own column (Item Code / Item Name / BU / Department / Account
+        # Code), which Lark Base populates AUTOMATICALLY via Lookup as
+        # soon as Item for Selection is set. We just need to write the
+        # source SingleSelect (Item for Selection + BU with Description)
+        # successfully and Lark cascades the rest.
         user_input = (line.get("desc_input") or "").strip().strip(",").strip()
-        enriched = enrich_desc_input(line, user_input)
-        if enriched:
-            lf["Description Input"] = enriched
-
-        # NOTE: Earlier we tried prepending '[CUS-002] item-name (BU: ... |
-        # Dept: ...)' into Description Input as a workaround for the locked
-        # structured fields. User rejected that — Description Input should
-        # hold only the user's typed text. Field protection on Item for
-        # Selection / BU with Description / BU Detail / desc_mode is a base
-        # config issue admin needs to fix. Until then, those columns stay
-        # empty after submit — user fills them in Lark UI directly.
+        if user_input:
+            lf["Description Input"] = user_input
 
         sm, wy = line.get("starting_month"), line.get("working_year")
         if sm in MONTH_NUM and wy:
