@@ -890,28 +890,86 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
     return {"created_lines": created_lines, "line_errors": line_errors, "warnings": warnings}
 
 
-def _get_qt_full(record_id: str) -> dict:
-    """Fetch parent QT Mgmt record + its linked detail rows."""
-    token = get_token()
-    pr = lark_request("GET",
-        f"/open-apis/bitable/v1/apps/{BASE_APP_TOKEN}/tables/{TABLES['qt_mgmt']}/records/{record_id}",
+def _search_record(table_id: str, record_id: str, token: str) -> dict | None:
+    """Fetch ONE record via POST /records/search (filter by record_id).
+
+    Search endpoint resolves Lookup-to-SingleSelect values to the option NAME
+    (text) — whereas GET /records/{id} returns raw option_id strings like
+    'optPDdxW3Z'. Using search keeps all returned data human-readable.
+
+    Returns the record dict (with fields keyed by name) or None on failure.
+    """
+    res = lark_request("POST",
+        f"/open-apis/bitable/v1/apps/{BASE_APP_TOKEN}/tables/{table_id}/records/search?page_size=1",
+        {"filter": {"conjunction": "and",
+                    "conditions": [{"field_name": "ID", "operator": "is", "value": [record_id]}]}},
         token=token)
-    if pr.get("code") != 0:
-        return {"error": pr}
-    rec = pr["data"]["record"]
-    f = rec.get("fields", {})
+    if res.get("code") != 0:
+        return None
+    items = (res.get("data") or {}).get("items") or []
+    if not items:
+        return None
+    rec = items[0]
+    # Search wraps every cell as {type, value: [...]}; flatten back to plain
+    # values so callers can use record.fields[name] directly like GET response.
+    flat: dict = {}
+    for k, v in (rec.get("fields") or {}).items():
+        if isinstance(v, dict) and "value" in v:
+            vals = v.get("value") or []
+            if len(vals) == 1:
+                vv = vals[0]
+                # Text cells come as [{text: "...", type: "text"}]
+                if isinstance(vv, dict) and "text" in vv:
+                    flat[k] = vv["text"]
+                else:
+                    flat[k] = vv
+            else:
+                flat[k] = vals
+        else:
+            flat[k] = v
+    rec["fields"] = flat
+    return rec
+
+
+def _get_qt_full(record_id: str) -> dict:
+    """Fetch parent QT Mgmt record + its linked detail rows.
+
+    Uses POST /records/search instead of GET /records/{id} so Lookup-to-
+    SingleSelect fields return their option NAME (text) — not the raw
+    option_id. Without this, fields like 'Business Model', 'Item Name',
+    'BU' in QT&SO Detail would surface as 'optPDdxW3Z' / 'optnQYsv7B'
+    in the QT Preview rendering.
+    """
+    token = get_token()
+    rec = _search_record(TABLES['qt_mgmt'], record_id, token)
+    if not rec:
+        # Fall back to direct GET in case search filter on 'ID' formula misbehaves
+        pr = lark_request("GET",
+            f"/open-apis/bitable/v1/apps/{BASE_APP_TOKEN}/tables/{TABLES['qt_mgmt']}/records/{record_id}",
+            token=token)
+        if pr.get("code") != 0:
+            return {"error": pr}
+        rec = pr["data"]["record"]
+
+    f = rec.get("fields") or {}
     detail = f.get("Detail") or []
     line_ids = []
-    for d in detail if isinstance(detail, list) else []:
-        if isinstance(d, dict):
-            line_ids.extend(d.get("record_ids") or [])
+    if isinstance(detail, list):
+        for d in detail:
+            if isinstance(d, dict):
+                line_ids.extend(d.get("record_ids") or d.get("link_record_ids") or [])
     items = []
     for lid in line_ids:
-        lr = lark_request("GET",
-            f"/open-apis/bitable/v1/apps/{BASE_APP_TOKEN}/tables/{TABLES['qtso_detail']}/records/{lid}",
-            token=token)
-        if lr.get("code") == 0:
-            items.append(lr["data"]["record"])
+        line_rec = _search_record(TABLES['qtso_detail'], lid, token)
+        if line_rec:
+            items.append(line_rec)
+        else:
+            # Fall back to GET if search misses
+            lr = lark_request("GET",
+                f"/open-apis/bitable/v1/apps/{BASE_APP_TOKEN}/tables/{TABLES['qtso_detail']}/records/{lid}",
+                token=token)
+            if lr.get("code") == 0:
+                items.append(lr["data"]["record"])
     return {"parent": rec, "lines": items}
 
 # ─── Write endpoints ─────────────────────────────────────────────────────────
