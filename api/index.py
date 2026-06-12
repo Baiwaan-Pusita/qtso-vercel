@@ -791,19 +791,27 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
             except Exception:
                 pass
         lf["Last item"] = LAST_YES if idx == total - 1 else LAST_NO
+        # Confirmation checkbox — match Lark Form behavior. Records created
+        # via the official form always have this ticked True. Without it,
+        # downstream automations / dashboards may filter the row out.
+        lf["ข้าพเจ้ายืนยันว่าข้อมุลครบถ้วน"] = True
         if idx == 0 and remark_text: lf["Remark"] = remark_text
 
         post_url = f"/open-apis/bitable/v1/apps/{BASE_APP_TOKEN}/tables/{TABLES['qtso_detail']}/records"
 
-        # Old-code strategy (server.py before the prod-base switch): only
-        # pre-strip the 4 fields ALWAYS rejected by Lark — desc_mode,
-        # Item (Not Used), Last item, Date Working (Month) — and TRY writing
-        # Item for Selection + BU with Description directly. At one point
-        # in time those two were writable. If Lark rejects, fall back to
-        # the adaptive retry below.
+        # Updated 2026-06-12 after admin unlocked several fields. Tested
+        # writability via isolated PUT on each field:
+        #   ✅ Last item              → writable (admin unlocked)
+        #   ✅ Date Working (Month)   → writable (admin unlocked)
+        #   ❌ ท่านต้องการเขียน Description → still locked
+        #   ❌ Item (Not Used)        → still locked (deprecated field)
+        #   ❌ BU Detail              → still locked
+        #   ❌ Item                   → still locked
+        # Stage 1 only pre-strips fields we KNOW are locked. As admin
+        # unlocks more, Stage 3 adaptive strip handles them dynamically.
         ALWAYS_LOCKED = {
             "ท่านต้องการเขียน Description เพิ่มเติมหรือไม่",
-            "Item (Not Used)", "Last item", "Date Working (Month)",
+            "Item (Not Used)",
         }
 
         res = lark_request("POST", post_url, {"fields": lf}, token=token)
