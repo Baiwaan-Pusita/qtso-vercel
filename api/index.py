@@ -685,15 +685,16 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
 
     for idx, line in enumerate(lines):
         lf: dict = {"QT&SO Management": [parent_id]}
-        # As of 2026-06-12 admin unlocked BU with Description (Reference
-        # options unchecked in Lark UI) — Lark now accepts API writes to it.
-        # The other 3 fields (Item for Selection / BU Detail / desc_mode)
-        # are still Reference-locked. Strategy:
-        #   • SEND BU with Description (Lark accepts now → BU column fills
-        #     + BU lookup chain derives Item Code's BU column automatically)
-        #   • DON'T send the other 3 — they still 1254062
-        # Strip-on-error fallback below drops BU with Description if Lark
-        # ever re-enables Reference options, keeping the submit working.
+        # Match local server.py's behavior — send ALL fields the user picked
+        # (including the 3 Reference-locked ones). Adaptive Stage 3 strip
+        # below drops whichever ones Lark currently rejects, so:
+        #   • Fields admin has unlocked (today: BU with Description) → land in Lark
+        #   • Fields still locked (today: Item for Selection / BU Detail /
+        #     desc_mode) → adaptively dropped, record still created
+        #   • When admin unlocks more later → those auto-start populating
+        #     with zero code change required
+        if line.get("item_selection"):
+            lf["Item for Selection"] = line["item_selection"]
         if line.get("bu"):
             bu_short = line["bu"].strip().lower()
             bu_idx = get_field_option_index(TABLES["qtso_detail"], "BU with Description")
@@ -702,6 +703,8 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
             em = next((n for n in matches if "—" in n), None)
             bu_full = em or (matches[0] if matches else None)
             if bu_full: lf["BU with Description"] = bu_full
+        if line.get("bu_detail"):
+            lf["BU Detail"] = line["bu_detail"]
         if line.get("quantity") is not None:
             lf["Quantity"] = float(line["quantity"])
         if line.get("unit_price") is not None:
@@ -718,14 +721,16 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
         if line.get("project_link_id"): lf["Project Link"] = [line["project_link_id"]]
         if line.get("project_detail"): lf["Project Detail"] = line["project_detail"]
 
-        # desc_mode SingleSelect is also Reference-locked — don't send.
-        # Description Input (plain text) IS writable, so we use it as the
-        # 'overflow' field for everything Lark blocks us from writing
-        # structurally. Auto-prepend the picked item's metadata pulled from
-        # Item Code (read me) — Item Code / Item Name / BU / Department /
-        # Account Code — so the Description column in Lark Base shows the
-        # full picture even though Item for Selection / BU / Department
-        # lookup columns stay empty.
+        # desc_mode (Reference-locked today) — send anyway. Adaptive strip
+        # drops it if Lark rejects.
+        desc_mode = line.get("desc_mode") or ""
+        if desc_mode in {"ต้องการเขียน Description ด้วยตนเอง",
+                          "ต้องการเขียน Description เพิ่มเติม",
+                          "ไม่ต้องการเขียน Description เพิ่มเติม"}:
+            lf["ท่านต้องการเขียน Description เพิ่มเติมหรือไม่"] = desc_mode
+        # Description Input — user typed text, prepend item metadata from
+        # Item Code source so the Description column reads complete even
+        # when Reference lookups stay empty.
         user_input = (line.get("desc_input") or "").strip().strip(",").strip()
         enriched = enrich_desc_input(line, user_input)
         if enriched:
@@ -784,25 +789,38 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
         stripped: list[str] = []
         initial_snapshot = None
         if res.get("code") != 0:
-            # Strip-on-error: drop ALWAYS_LOCKED + BU with Description in one
-            # shot, then retry. If admin ever re-enables Reference options on
-            # BU with Description, this keeps submits working — BU column
-            # would just stay empty for that submit.
             initial_snapshot = {k: v for k, v in lf.items() if k != "QT&SO Management"}
-            stage1_drop = [k for k in lf
-                           if k in ALWAYS_LOCKED or k == "BU with Description"]
+            # Stage 1: drop ALWAYS_LOCKED auto-owned fields (Lark blocks manual
+            # writes to these — Item (Not Used) / Last item / Date Working).
+            stage1_drop = [k for k in lf if k in ALWAYS_LOCKED]
             if stage1_drop:
                 stripped.extend(stage1_drop)
                 lf = {k: v for k, v in lf.items() if k not in stage1_drop}
                 res = lark_request("POST", post_url, {"fields": lf}, token=token)
-                if "BU with Description" in stage1_drop:
-                    warnings.append({
-                        "line_index": idx,
-                        "bu_dropped_unexpectedly": True,
-                        "hint": "BU with Description was accepted in our last test "
-                                "but Lark just rejected it. Admin may have re-checked "
-                                "'Reference options'. Submit succeeded with BU column empty.",
-                    })
+            # Stage 2: drop desc_mode if Lark still rejects (Reference-locked).
+            if res.get("code") == 1254062 and "ท่านต้องการเขียน Description เพิ่มเติมหรือไม่" in lf:
+                lf = {k: v for k, v in lf.items() if k != "ท่านต้องการเขียน Description เพิ่มเติมหรือไม่"}
+                stripped.append("ท่านต้องการเขียน Description เพิ่มเติมหรือไม่")
+                res = lark_request("POST", post_url, {"fields": lf}, token=token)
+            # Stage 3 (adaptive): if STILL failing with 1254062, drop each
+            # remaining SingleSelect one at a time to find the rejecter.
+            # This is how local server.py handles it — and it lets each field
+            # auto-recover when admin unchecks 'Reference options' on it.
+            if res.get("code") == 1254062:
+                remaining_ss = [k for k in list(lf.keys()) if k in SS_FIELDS]
+                for candidate in remaining_ss:
+                    trial_lf = {k: v for k, v in lf.items() if k != candidate}
+                    trial_res = lark_request("POST", post_url, {"fields": trial_lf}, token=token)
+                    if trial_res.get("code") == 0:
+                        stripped.append(candidate)
+                        warnings.append({
+                            "line_index": idx,
+                            "ss_dropped": candidate,
+                            "hint": f"Lark rejected {candidate!r} (Reference-locked). "
+                                    f"Other SingleSelect fields landed OK.",
+                        })
+                        lf, res = trial_lf, trial_res
+                        break
         if res.get("code") != 0:
             line_errors.append({
                 "index": idx, "error": res, "stripped": stripped,
