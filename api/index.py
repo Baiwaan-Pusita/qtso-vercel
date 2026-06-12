@@ -699,15 +699,13 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
                          "ต้องการเขียน Description เพิ่มเติม") and user_input:
             lf["Description Input"] = user_input
 
-        # Enrich Description Input with Item Code / BU / Department pulled
-        # from the Item Code table — the prod base locks the structured
-        # SingleSelects for Item / BU / Department so we can't write them
-        # directly, but we CAN write Description Input. Lark's Description
-        # formula reflects this so the row stays searchable + readable.
-        existing_desc = lf.get("Description Input", "")
-        enriched = enrich_desc_input(line, existing_desc)
-        if enriched:
-            lf["Description Input"] = enriched
+        # NOTE: Earlier we tried prepending '[CUS-002] item-name (BU: ... |
+        # Dept: ...)' into Description Input as a workaround for the locked
+        # structured fields. User rejected that — Description Input should
+        # hold only the user's typed text. Field protection on Item for
+        # Selection / BU with Description / BU Detail / desc_mode is a base
+        # config issue admin needs to fix. Until then, those columns stay
+        # empty after submit — user fills them in Lark UI directly.
 
         sm, wy = line.get("starting_month"), line.get("working_year")
         if sm in MONTH_NUM and wy:
