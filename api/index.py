@@ -472,6 +472,40 @@ def api_auth_login():
            f"&state={state}")
     return redirect(url)
 
+def refresh_user_token(refresh_token: str) -> dict | None:
+    """Use a stored refresh_token to mint a fresh user_access_token.
+    Returns updated session dict (open_id/name/access_token/refresh_token/
+    token_expires_at) or None if refresh failed (refresh_token itself
+    expired — TTL ~30 days). Caller should fall back to tenant_token or
+    prompt re-login if this returns None."""
+    if not refresh_token:
+        return None
+    try:
+        res = lark_request("POST", "/open-apis/authen/v1/refresh_access_token",
+                           {"grant_type": "refresh_token",
+                            "refresh_token": refresh_token},
+                           token=get_token())
+    except Exception as e:
+        print(f"[refresh-token] HTTP error: {e}")
+        return None
+    if res.get("code") != 0:
+        print(f"[refresh-token] Lark returned: {res}")
+        return None
+    d = res.get("data", {})
+    if not d.get("access_token"):
+        return None
+    return {
+        "open_id": d.get("open_id"),
+        "name": d.get("name"),
+        "en_name": d.get("en_name") or d.get("name"),
+        "avatar_url": d.get("avatar_url") or d.get("avatar_thumb") or "",
+        "user_id": d.get("user_id"),
+        "user_access_token": d.get("access_token"),
+        "refresh_token": d.get("refresh_token") or refresh_token,
+        "token_expires_at": int(time.time()) + int(d.get("expires_in") or 7200),
+    }
+
+
 @app.route("/api/auth/callback", methods=["GET"])
 @app.route("/api/auth/lark/callback", methods=["GET"])
 def api_auth_callback():
@@ -765,22 +799,32 @@ def _create_lines(payload: dict, parent_id: str, user_token: str | None = None) 
 
         res = lark_request("POST", post_url, {"fields": lf}, token=token)
 
-        # Fallback path: user_token returned 99991679 → switch to tenant_token.
-        # CRITICAL: must also strip the protected fields, otherwise tenant_token
-        # will immediately return 1254062 on the same fields user_token rejected.
-        if (res.get("code") == 99991679 or "99991679" in (res.get("body") or "")) and fallback_token:
-            stripped_on_fallback = _strip_protected(lf)
+        # Fallback path: user_token is bad (missing scope / expired / HTTP 401)
+        #   • 99991679 — user lacks bitable scope
+        #   • 99991677 — user_access_token expired (TTL ~2h, no auto-refresh yet)
+        #   • -1 + HTTPError 401 — generic auth failure from lark_request wrapper
+        # In all three cases, switch to tenant_token and let the adaptive
+        # Stage 1-3 strip below handle Reference-locked field rejections.
+        body_str = res.get("body") or ""
+        is_user_token_bad = (
+            res.get("code") in (99991677, 99991679)
+            or "99991677" in body_str
+            or "99991679" in body_str
+            or (res.get("code") == -1 and "401" in (res.get("msg") or ""))
+        )
+        if is_user_token_bad and fallback_token:
             warnings.append({
                 "line_index": idx,
                 "fallback_to_tenant": True,
-                "pre_stripped_protected_fields": stripped_on_fallback,
-                "hint": "user_access_token lacks bitable:app / base:record:create scope. "
-                        "Add these in Lark Developer Console → Permissions & Scopes, "
-                        "then logout/login again. Falling back to tenant_token + "
-                        "stripping the 4 field-protected SingleSelects.",
+                "user_token_error": res.get("code"),
+                "hint": "user_access_token expired or lacks scope. "
+                        "Switched to tenant_token — Reference-locked fields "
+                        "will be dropped by adaptive strip below if needed. "
+                        "Logout/login on the app to refresh OAuth token.",
             })
             token = fallback_token
             fallback_token = None  # only switch once per submit
+            # Reset to clean slate and retry with tenant token
             res = lark_request("POST", post_url, {"fields": lf}, token=token)
         stripped: list[str] = []
         initial_snapshot = None
@@ -953,8 +997,27 @@ def api_qt_phase3():
     # Use the logged-in user's Lark OAuth token if they have a session — user_token
     # may bypass field-level protections that tenant_token can't touch. Falls back
     # to tenant_token inside _create_lines if user_token lacks bitable scope.
-    sess = get_session()
-    user_tok = sess.get("user_access_token") if sess else None
+    sess = get_session() or {}
+    user_tok = sess.get("user_access_token")
+    refreshed_session = None  # set if we minted a new token; written to cookie below
+    # Proactive refresh: user_access_token TTL is ~2h. If it's within 5 min of
+    # expiry (or already expired), use the stored refresh_token to mint a new
+    # one BEFORE calling Lark. Saves a wasted POST + adaptive-strip dance.
+    exp = sess.get("token_expires_at") or 0
+    if user_tok and exp and exp - time.time() < 300:
+        new_sess = refresh_user_token(sess.get("refresh_token") or "")
+        if new_sess:
+            user_tok = new_sess["user_access_token"]
+            # Preserve fields that refresh response may omit
+            new_sess["open_id"] = new_sess.get("open_id") or sess.get("open_id")
+            new_sess["name"] = new_sess.get("name") or sess.get("name")
+            new_sess["en_name"] = new_sess.get("en_name") or sess.get("en_name")
+            new_sess["avatar_url"] = new_sess.get("avatar_url") or sess.get("avatar_url")
+            refreshed_session = new_sess
+        else:
+            # refresh_token itself expired (TTL ~30 days) — drop user_tok so we
+            # fall straight to tenant_token without a wasted user_token attempt.
+            user_tok = None
     result = _create_lines(payload, record_id, user_token=user_tok)
 
     # Fetch latest Request No. for the response (1 quick GET, no polling — Vercel timeout)
@@ -968,7 +1031,7 @@ def api_qt_phase3():
     except Exception:
         pass
 
-    return jsonify({
+    resp = make_response(jsonify({
         "ok": not result.get("line_errors"),
         "record_id": record_id,
         "request_no": latest_request_no,
@@ -979,7 +1042,13 @@ def api_qt_phase3():
         "skipped_invalid_options": skipped,
         "pdf_attached_to": None,
         "parent_fields_written": list(all_fields.keys()),
-    })
+        "token_refreshed": bool(refreshed_session),
+    }))
+    # If we minted a fresh user_token during this submit, write it back to
+    # the session cookie so the next request doesn't re-refresh.
+    if refreshed_session:
+        return set_session_cookie(resp, refreshed_session)
+    return resp
 
 
 @app.route("/api/qt-lookup", methods=["POST"])
