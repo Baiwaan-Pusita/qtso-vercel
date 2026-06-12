@@ -999,25 +999,33 @@ def api_qt_phase3():
     # to tenant_token inside _create_lines if user_token lacks bitable scope.
     sess = get_session() or {}
     user_tok = sess.get("user_access_token")
+    refresh_tok = sess.get("refresh_token")
     refreshed_session = None  # set if we minted a new token; written to cookie below
-    # Proactive refresh: user_access_token TTL is ~2h. If it's within 5 min of
-    # expiry (or already expired), use the stored refresh_token to mint a new
-    # one BEFORE calling Lark. Saves a wasted POST + adaptive-strip dance.
-    exp = sess.get("token_expires_at") or 0
-    if user_tok and exp and exp - time.time() < 300:
-        new_sess = refresh_user_token(sess.get("refresh_token") or "")
+    clear_session_on_response = False  # set if refresh fails → user needs re-login
+    # ALWAYS refresh proactively if we have a refresh_token. Lark
+    # user_access_token TTL is ~2h but legacy sessions don't store
+    # token_expires_at, so we can't trust the timestamp check alone.
+    # Refresh is fast (~100ms) and safely idempotent; the saved
+    # round-trip on the expired-token path is worth it.
+    if refresh_tok:
+        new_sess = refresh_user_token(refresh_tok)
         if new_sess:
             user_tok = new_sess["user_access_token"]
-            # Preserve fields that refresh response may omit
+            # Preserve identity fields refresh response may omit
             new_sess["open_id"] = new_sess.get("open_id") or sess.get("open_id")
             new_sess["name"] = new_sess.get("name") or sess.get("name")
             new_sess["en_name"] = new_sess.get("en_name") or sess.get("en_name")
             new_sess["avatar_url"] = new_sess.get("avatar_url") or sess.get("avatar_url")
             refreshed_session = new_sess
+            print(f"[token-refresh] ok — new exp={new_sess.get('token_expires_at')}")
         else:
-            # refresh_token itself expired (TTL ~30 days) — drop user_tok so we
-            # fall straight to tenant_token without a wasted user_token attempt.
+            # refresh_token itself expired (TTL ~30 days) → drop user_tok so
+            # _create_lines goes straight to tenant_token. Session cookie
+            # will be cleared on the response so user gets re-prompted to
+            # Lark login next time.
+            print(f"[token-refresh] failed — refresh_token expired or invalid")
             user_tok = None
+            clear_session_on_response = True  # force fresh login on next visit
     result = _create_lines(payload, record_id, user_token=user_tok)
 
     # Fetch latest Request No. for the response (1 quick GET, no polling — Vercel timeout)
@@ -1048,6 +1056,10 @@ def api_qt_phase3():
     # the session cookie so the next request doesn't re-refresh.
     if refreshed_session:
         return set_session_cookie(resp, refreshed_session)
+    # If refresh_token itself expired, clear the cookie so the frontend's
+    # bootstrap auto-redirects to Lark login on the next page load.
+    if clear_session_on_response:
+        resp.set_cookie("sid", "", max_age=0, httponly=True, samesite="Lax")
     return resp
 
 
