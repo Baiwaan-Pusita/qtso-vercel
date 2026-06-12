@@ -2565,6 +2565,38 @@ async function _legacySubmit(payload) {
 }
 
 // === DONE page (Phase 3 success) ===
+// Banner that appears after Phase 2 confirm — points the user to the Lark
+// shared form, which is the ONLY path that fills the field-protected
+// SingleSelects (Item / BU / desc_mode / BU Detail) on the prod base.
+// The Lark form is "tenant_editable" — anyone in Ripples can submit + Lark's
+// form validation bypasses the field-level locks that block the records API.
+function showLarkFormBanner(qtId) {
+  const existing = document.getElementById('lark_form_banner');
+  if (existing) existing.remove();
+  const banner = document.createElement('div');
+  banner.id = 'lark_form_banner';
+  banner.style.cssText = 'background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #f59e0b;border-radius:10px;padding:14px 18px;margin:14px 0;display:flex;align-items:center;gap:14px;';
+  const sharedUrl = 'https://p42u8dv87zi.sg.larksuite.com/share/base/shrlgahILm0SSVVAX8zDXsdk9ef';
+  banner.innerHTML = `
+    <div style="font-size:24px;">📝</div>
+    <div style="flex:1;">
+      <div style="font-weight:700;color:#92400e;margin-bottom:2px;">กรอก Line Items ใน Lark Form</div>
+      <div style="font-size:12px;color:#78350f;line-height:1.5;">
+        Fields บางตัว (Item / BU / Description Mode / BU Detail) ถูก Lark ล็อกไว้ ไม่ให้เขียนผ่าน API
+        — กรอกผ่าน Lark Form แทนเพื่อให้ข้อมูลครบทุก field. QT ID: <b>${escapeHtml(qtId || '')}</b>
+      </div>
+    </div>
+    <a href="${sharedUrl}" target="_blank" rel="noopener" style="background:#d97706;color:white;padding:8px 16px;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px;white-space:nowrap;">เปิด Lark Form ↗</a>
+  `;
+  // Insert above Phase 3 section
+  const phase3 = document.querySelector('.phase-section[data-phase="3"]');
+  if (phase3 && phase3.parentNode) {
+    phase3.parentNode.insertBefore(banner, phase3);
+  } else {
+    document.querySelector('.container')?.prepend(banner);
+  }
+}
+
 function showDonePage(res) {
   document.getElementById('done_qtno').textContent = PhaseState.requestNo || '';
   // Hide form chrome
@@ -3088,6 +3120,9 @@ document.getElementById('btn_confirm_phase2').addEventListener('click', async ()
       persistState();
       clearDraft();  // Phase 2 saved to Lark — local draft no longer needed
       showPhase(3);
+      // Show banner with link to Lark Form for line items (field-protected
+      // SingleSelects only work via Lark's tenant_editable form, not API).
+      showLarkFormBanner(PhaseState.requestNo);
     }
     // Lock Phase 2 fields after successful confirm
     lockPhase2();
